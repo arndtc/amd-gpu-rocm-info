@@ -17,6 +17,8 @@ test("synthetic rocm-smi stdout parses the first GPU", () => {
     {
       gfxClockMhz: 1500,
       junctionTempC: 46,
+      clockSource: "sclk",
+      tempSource: "junction",
       vramUsedBytes: 1073741824,
       unrecognized: false,
     },
@@ -33,13 +35,15 @@ test("the first GPU line wins because dot does not cross newlines", () => {
     {
       gfxClockMhz: 300,
       junctionTempC: 46,
+      clockSource: "sclk",
+      tempSource: "junction",
       vramUsedBytes: 100,
       unrecognized: false,
     },
   );
 });
 
-test("a temperature block without junction leaves that field null", () => {
+test("edge is used when junction is absent", () => {
   assert.deepEqual(
     parseRocmSmi({
       clocks: fixture("showclocks.txt"),
@@ -48,10 +52,28 @@ test("a temperature block without junction leaves that field null", () => {
     }),
     {
       gfxClockMhz: 1500,
-      junctionTempC: null,
+      junctionTempC: 40,
+      clockSource: "sclk",
+      tempSource: "edge",
       vramUsedBytes: 1073741824,
       unrecognized: false,
     },
+  );
+});
+
+test("mabel rocm-smi uses sclk and edge", () => {
+  const dir = new URL("./fixtures/rocm-smi/mabel-both/", import.meta.url);
+  const read = (name) => readFileSync(new URL(name, dir), "utf8");
+  const version = read("version.txt");
+  assert.match(version, /ROCM-SMI version: 4\.0\.0\+unknown/);
+  assert.match(version, /ROCM-SMI-LIB version: 7\.8\.0/);
+  assert.deepEqual(
+    parseRocmSmi({
+      clocks: read("showclocks.txt"),
+      temp: read("showtemp.txt"),
+      vram: read("showmeminfo-vram.txt"),
+    }),
+    JSON.parse(read("expected.json")),
   );
 });
 

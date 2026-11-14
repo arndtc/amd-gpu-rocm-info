@@ -69,7 +69,6 @@ const GPUMonitorIndicator = GObject.registerClass(
       this._tool = { id: null, path: null, allowEmptyFallback: false };
       this._found = { "amd-smi": null, "rocm-smi": null };
       this._preference = "auto";
-      this._amdFirstDone = false;
       this._nullStreak = 0;
       this._everShown = false;
       this._lastLogClass = null;
@@ -80,6 +79,14 @@ const GPUMonitorIndicator = GObject.registerClass(
         style_class: "gpu-monitor-container",
         vertical: false,
       });
+
+      this._backendLabel = new St.Label({
+        text: "",
+        y_align: Clutter.ActorAlign.CENTER,
+        style_class: "gpu-monitor-label",
+      });
+      this._backendLabel.hide();
+      this._container.add_child(this._backendLabel);
 
       this._freqLabel = new St.Label({
         text: "--- MHz",
@@ -133,6 +140,7 @@ const GPUMonitorIndicator = GObject.registerClass(
     _showError(text) {
       this._errorLabel.set_text(text);
       this._errorLabel.show();
+      this._backendLabel.hide();
       for (const box of this._metricBoxes) box.hide();
     }
 
@@ -173,7 +181,7 @@ const GPUMonitorIndicator = GObject.registerClass(
       this._showError(text);
       const amd = this._found["amd-smi"] ?? "missing";
       const rocm = this._found["rocm-smi"] ?? "missing";
-      const fallback = preference === "auto" ? "n/a" : "no";
+      const fallback = "no";
       this._log(
         "no-tool",
         `amd-gpu-rocm-info: no tool preference=${preference} amd=${amd} rocm=${rocm} fallback=${fallback}`,
@@ -203,7 +211,6 @@ const GPUMonitorIndicator = GObject.registerClass(
       this._stop();
       this._lastLogClass = null;
       this._nullStreak = 0;
-      this._amdFirstDone = false;
       this._generation += 1;
       this._cancellable = new Gio.Cancellable();
 
@@ -303,26 +310,15 @@ const GPUMonitorIndicator = GObject.registerClass(
         `amd-gpu-rocm-info: spawn failed tool=${tool} error=${flatten(error?.message)}`,
       );
       if (isNoent(error)) {
-        if (tool === "amd-smi" && this._tool.allowEmptyFallback && !this._amdFirstDone) {
-          this._amdFirstDone = true;
-          this._tool = selectTool("rocm-smi", this._found);
-          if (!this._tool.path) {
-            this._showNoTool(this._preference);
-            return false;
-          }
-          this._log(
-            "using",
-            `amd-gpu-rocm-info: using tool=rocm-smi path=${this._tool.path} preference=${this._preference}`,
-          );
-          return this._spawnSample();
-        }
-        this._showNoTool(this._preference);
+        this._showNoTool(tool);
         return false;
       }
       this._finishSample(
         {
           gfxClockMhz: null,
           junctionTempC: null,
+          clockSource: null,
+          tempSource: null,
           vramUsedBytes: null,
           unrecognized: false,
         },
@@ -352,6 +348,8 @@ const GPUMonitorIndicator = GObject.registerClass(
               {
                 gfxClockMhz: null,
                 junctionTempC: null,
+                clockSource: null,
+                tempSource: null,
                 vramUsedBytes: null,
                 unrecognized: true,
               },
@@ -439,67 +437,45 @@ const GPUMonitorIndicator = GObject.registerClass(
       return true;
     }
 
+    _paintSample(parsed) {
+      const tool = this._tool.id;
+      const edge = parsed.tempSource === "edge";
+      this._backendLabel.set_text(tool);
+      this._backendLabel.show();
+      const tip = edge ? `${tool}, temperature is edge` : tool;
+      this.accessible_name = tip;
+      this.tooltip_text = tip;
+
+      this._freqLabel.set_text(
+        parsed.gfxClockMhz === null ? "N/A" : `${parsed.gfxClockMhz} MHz`,
+      );
+      if (parsed.junctionTempC === null) {
+        this._tempLabel.set_text("N/A");
+        this._tempLabel.style_class = "gpu-monitor-label";
+      } else {
+        const suffix = edge ? " edge" : "";
+        this._tempLabel.set_text(`${parsed.junctionTempC}°C${suffix}`);
+        this._tempLabel.style_class = `gpu-monitor-label ${temperatureClass(parsed.junctionTempC)}`;
+      }
+      if (parsed.vramUsedBytes === null) {
+        this._memLabel.set_text("N/A");
+      } else {
+        const text = formatBytes(parsed.vramUsedBytes);
+        this._memLabel.set_text(text === null ? "N/A" : text);
+      }
+    }
+
     _finishSample(parsed, meta) {
-      const anyNull =
-        parsed.gfxClockMhz === null ||
-        parsed.junctionTempC === null ||
-        parsed.vramUsedBytes === null;
       const allNull =
         parsed.gfxClockMhz === null &&
         parsed.junctionTempC === null &&
         parsed.vramUsedBytes === null;
 
-      if (
-        this._tool.id === "amd-smi" &&
-        !this._amdFirstDone &&
-        anyNull &&
-        this._tool.allowEmptyFallback
-      ) {
-        this._amdFirstDone = true;
-        const rocmPath = this._found["rocm-smi"];
-        this._log(
-          "staying",
-          `amd-gpu-rocm-info: amd-smi snapshot had no usable metrics; staying on rocm-smi path=${rocmPath}`,
-        );
-        if (parsed.unrecognized) {
-          this._log(
-            "unrecognized",
-            `amd-gpu-rocm-info: unrecognized output tool=amd-smi stdout=${flatten(meta.stdout)}`,
-          );
-        }
-        this._tool = selectTool("rocm-smi", this._found);
-        if (!this._tool.path) {
-          this._showNoTool(this._preference);
-          return;
-        }
-        this._log(
-          "using",
-          `amd-gpu-rocm-info: using tool=rocm-smi path=${this._tool.path} preference=${this._preference}`,
-        );
-        this._spawnSample();
-        return;
-      }
-      if (this._tool.id === "amd-smi") this._amdFirstDone = true;
-
       if (!allNull) {
         this._nullStreak = 0;
         this._showMetrics();
-        if (parsed.gfxClockMhz !== null) {
-          this._freqLabel.set_text(`${parsed.gfxClockMhz} MHz`);
-          this._everShown = true;
-        }
-        if (parsed.junctionTempC !== null) {
-          this._tempLabel.set_text(`${parsed.junctionTempC}°C`);
-          this._tempLabel.style_class = `gpu-monitor-label ${temperatureClass(parsed.junctionTempC)}`;
-          this._everShown = true;
-        }
-        if (parsed.vramUsedBytes !== null) {
-          const text = formatBytes(parsed.vramUsedBytes);
-          if (text !== null) {
-            this._memLabel.set_text(text);
-            this._everShown = true;
-          }
-        }
+        this._paintSample(parsed);
+        this._everShown = true;
         if (!meta.exitOk && !parsed.unrecognized && !meta.decodeError) {
           this._log(
             "command-failed",

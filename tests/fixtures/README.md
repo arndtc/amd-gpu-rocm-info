@@ -6,4 +6,6 @@
 
 `rocm-smi/captured/` is harlow's stdout from `rocm-smi --showclocks`, `--showtemp`, `--showmeminfo vram`, and `rocm-smi --version`. The version file says `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0`. `low-power.stderr` is the stderr warning from those commands.
 
-`expected.json` beside each capture is the four-field parser result from the rules in `docs/designs/amd-smi-rocm-smi-interchange.md`.
+`amd-smi/mabel-both/` and `rocm-smi/mabel-both/` are the later mabel capture. amd-smi prints `AMDSMI Tool: 26.2.1+unknown`, library 26.2.1, ROCm 10.1.0. Every gfx clock is `N/A` and hotspot is `N/A`, so the panel clock is `N/A` and the temperature is edge at 39°C. rocm-smi on that capture is sclk 813 MHz, edge 39°C, and 1004412928 used bytes. These files do not replace `amd-smi/metric.json` (mabel 27.1.0) or `amd-smi/harlow/`.
+
+`expected.json` beside each capture is the parser result from the rules in `docs/designs/amd-smi-rocm-smi-interchange.md`.

@@ -14,11 +14,11 @@ test("candidatePaths lists /usr/bin then /opt/rocm/bin", () => {
   ]);
 });
 
-test("auto with both paths prefers amd-smi and allows fallback", () => {
+test("auto with both paths uses amd-smi and does not switch", () => {
   assert.deepEqual(selectTool("auto", { "amd-smi": amd, "rocm-smi": rocm }), {
     id: "amd-smi",
     path: amd,
-    allowEmptyFallback: true,
+    allowEmptyFallback: false,
   });
 });
 
@@ -76,6 +76,6 @@ test("an unknown preference behaves as auto", () => {
   assert.deepEqual(selectTool("banana", { "amd-smi": amd, "rocm-smi": rocm }), {
     id: "amd-smi",
     path: amd,
-    allowEmptyFallback: true,
+    allowEmptyFallback: false,
   });
 });

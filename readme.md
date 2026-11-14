@@ -2,7 +2,7 @@ This GNOME Shell extension shows AMD GPU graphics clock, temperature, and VRAM u
 
 The indicator reads one tool:
 
-- `auto` (the default) uses `amd-smi` when the first sample has a graphics clock, a hotspot temperature, and used VRAM. If any of those is missing and `rocm-smi` is installed, that sample is not shown and the extension uses `rocm-smi` until it is enabled again.
+- `auto` (the default) uses `amd-smi` when that program is installed, and otherwise `rocm-smi`. The choice is made once each time the extension starts. A sample that is missing a number does not switch tools.
 - `amd-smi` and `rocm-smi` force that tool. A forced tool that is not installed does not switch to the other one.
 
 Commands, with the absolute path of the binary that was found:
@@ -12,9 +12,9 @@ Commands, with the absolute path of the binary that was found:
 - `rocm-smi --showtemp`
 - `rocm-smi --showmeminfo vram`
 
-The panel shows the graphics clock in MHz, temperature in °C, and VRAM used. For `amd-smi`, temperature is the hotspot sensor. For `rocm-smi`, temperature is the junction sensor. Above 70°C the temperature is warm. Above 85°C it is high. 70 and 85 stay on the cooler side of those lines.
+The panel shows the active tool name (`amd-smi` or `rocm-smi`), the graphics clock in MHz, the temperature in °C, and VRAM used. A clock the tool does not report is shown as `N/A`.
 
-Strix Halo reports `clock.gfx_0.clk` and `temperature.hotspot` as `N/A`. The panel then uses the APU average gfx clock (`clock.apu_average_gfxclk_frequency`) and the APU gfx temperature (`temperature.apu_temperature_gfx`). Discrete numbers are kept when they are real.
+`amd-smi` uses `clock.gfx_0.clk` and `temperature.hotspot` when those are numbers. When `gfx_0` is `N/A` and `clock.apu_average_gfxclk_frequency` exists, that average is the clock. When hotspot is `N/A`, the temperature is `temperature.edge` and the label includes the word `edge`. `rocm-smi` uses the junction temperature, and uses edge, also labeled `edge`, when the junction line is absent. Above 70°C the temperature is warm. Above 85°C it is high. 70 and 85 stay on the cooler side of those lines. The same sentence is in the panel tooltip.
 
 Samples run every 3 seconds while the screen is unlocked and a tool is bound. Locking the screen stops them. If the chosen binary cannot be found, the panel shows one of `no SMI tool`, `no amd-smi`, or `no rocm-smi`, and it does not keep launching a process. If a bound tool returns no numbers and there is nothing to fall back to, the panel shows `SMI unreadable`.
 

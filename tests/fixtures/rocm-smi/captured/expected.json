@@ -1,6 +1,8 @@
 {
   "gfxClockMhz": 0,
   "junctionTempC": 35,
+  "clockSource": "sclk",
+  "tempSource": "junction",
   "vramUsedBytes": 3979702272,
   "unrecognized": false
 }

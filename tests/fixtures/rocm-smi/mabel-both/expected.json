@@ -1,0 +1,8 @@
+{
+  "gfxClockMhz": 813,
+  "junctionTempC": 39,
+  "clockSource": "sclk",
+  "tempSource": "edge",
+  "vramUsedBytes": 1004412928,
+  "unrecognized": false
+}

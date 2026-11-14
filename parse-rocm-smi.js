@@ -14,9 +14,18 @@ export function rocmArgvTails() {
 }
 
 export function parseRocmSmi({ clocks, temp, vram }) {
+  const gfxClockMhz = firstInt(clocks, /.*sclk.*\((\d+).*/i);
+  let junctionTempC = firstInt(temp, /.*jun.*: ([0-9.]+).*/i);
+  let tempSource = junctionTempC === null ? null : "junction";
+  if (junctionTempC === null) {
+    junctionTempC = firstInt(temp, /.*edge.*: ([0-9.]+).*/i);
+    if (junctionTempC !== null) tempSource = "edge";
+  }
   return {
-    gfxClockMhz: firstInt(clocks, /.*sclk.*\((\d+).*/i),
-    junctionTempC: firstInt(temp, /.*jun.*: ([0-9.]+).*/i),
+    gfxClockMhz,
+    junctionTempC,
+    clockSource: gfxClockMhz === null ? null : "sclk",
+    tempSource,
     vramUsedBytes: firstInt(vram, /.*Used.*: (\d+).*/i),
     unrecognized: false,
   };

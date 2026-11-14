@@ -1,6 +1,8 @@
 const EMPTY = {
   gfxClockMhz: null,
   junctionTempC: null,
+  clockSource: null,
+  tempSource: null,
   vramUsedBytes: null,
   unrecognized: true,
 };
@@ -42,12 +44,16 @@ export function parseAmdSmiMetric(stdout) {
   const clockNode = asObject(gpu.clock);
   const tempNode = asObject(gpu.temperature);
   let clock = finiteUnit(clockNode?.gfx_0?.clk, ["MHz"]);
+  let clockSource = clock === null ? null : "gfx_0";
   if (clock === null) {
     clock = finiteUnit(clockNode?.apu_average_gfxclk_frequency, ["MHz"]);
+    if (clock !== null) clockSource = "apu_average_gfxclk";
   }
   let temp = finiteUnit(tempNode?.hotspot, ["C", "°C"]);
+  let tempSource = temp === null ? null : "hotspot";
   if (temp === null) {
-    temp = finiteUnit(tempNode?.apu_temperature_gfx, ["C", "°C"]);
+    temp = finiteUnit(tempNode?.edge, ["C", "°C"]);
+    if (temp !== null) tempSource = "edge";
   }
   const vram = finiteUnit(asObject(gpu.mem_usage)?.used_vram, ["MB", "B"]);
 
@@ -68,6 +74,8 @@ export function parseAmdSmiMetric(stdout) {
   return {
     gfxClockMhz: clock === null ? null : Math.trunc(clock),
     junctionTempC,
+    clockSource,
+    tempSource,
     vramUsedBytes,
     unrecognized: false,
   };

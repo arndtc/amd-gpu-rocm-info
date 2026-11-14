@@ -26,6 +26,8 @@ const gpu1 = {
 const parsedGpu0 = {
   gfxClockMhz: 1500,
   junctionTempC: 46,
+  clockSource: "gfx_0",
+  tempSource: "hotspot",
   vramUsedBytes: 2097152,
   unrecognized: false,
 };
@@ -47,6 +49,8 @@ test("used_vram without a unit is null", () => {
   assert.deepEqual(parseAmdSmiMetric(JSON.stringify([sample])), {
     gfxClockMhz: 1500,
     junctionTempC: 46,
+    clockSource: "gfx_0",
+    tempSource: "hotspot",
     vramUsedBytes: null,
     unrecognized: false,
   });
@@ -59,7 +63,7 @@ test("discrete clock and hotspot win over APU fields", () => {
   assert.deepEqual(parseAmdSmiMetric(JSON.stringify([sample])), parsedGpu0);
 });
 
-test("N/A discrete fields fall back to the APU gfx clock and temperature", () => {
+test("N/A gfx_0 uses the APU clock and N/A hotspot uses edge", () => {
   const sample = structuredClone(gpu0);
   sample.clock.gfx_0.clk = "N/A";
   sample.temperature.hotspot = "N/A";
@@ -67,7 +71,9 @@ test("N/A discrete fields fall back to the APU gfx clock and temperature", () =>
   sample.temperature.apu_temperature_gfx = { value: 39.12, unit: "C" };
   assert.deepEqual(parseAmdSmiMetric(JSON.stringify([sample])), {
     gfxClockMhz: 830,
-    junctionTempC: 39,
+    junctionTempC: 30,
+    clockSource: "apu_average_gfxclk",
+    tempSource: "edge",
     vramUsedBytes: 2097152,
     unrecognized: false,
   });
@@ -79,17 +85,21 @@ test("clk value N/A is null when no APU clock is present", () => {
   assert.deepEqual(parseAmdSmiMetric(JSON.stringify([sample])), {
     gfxClockMhz: null,
     junctionTempC: 46,
+    clockSource: null,
+    tempSource: "hotspot",
     vramUsedBytes: 2097152,
     unrecognized: false,
   });
 });
 
-test("edge without hotspot does not become the temperature", () => {
+test("edge is the temperature when hotspot is missing", () => {
   const sample = structuredClone(gpu0);
   delete sample.temperature.hotspot;
   assert.deepEqual(parseAmdSmiMetric(JSON.stringify([sample])), {
     gfxClockMhz: 1500,
-    junctionTempC: null,
+    junctionTempC: 30,
+    clockSource: "gfx_0",
+    tempSource: "edge",
     vramUsedBytes: 2097152,
     unrecognized: false,
   });
@@ -99,6 +109,8 @@ test("a document with no gpu 0 is unrecognized", () => {
   assert.deepEqual(parseAmdSmiMetric(JSON.stringify([{ gpu: 1 }])), {
     gfxClockMhz: null,
     junctionTempC: null,
+    clockSource: null,
+    tempSource: null,
     vramUsedBytes: null,
     unrecognized: true,
   });
@@ -108,6 +120,8 @@ test("invalid JSON is unrecognized", () => {
   assert.deepEqual(parseAmdSmiMetric("not-json"), {
     gfxClockMhz: null,
     junctionTempC: null,
+    clockSource: null,
+    tempSource: null,
     vramUsedBytes: null,
     unrecognized: true,
   });
@@ -125,6 +139,19 @@ test("harlow discrete amd-smi keeps gfx_0 and hotspot", () => {
   const version = readFileSync(new URL("version.txt", dir), "utf8");
   assert.match(version, /AMDSMI Tool: 26\.2\.1\+unknown/);
   assert.match(version, /AMDSMI Library version: 26\.2\.1/);
+  assert.deepEqual(
+    parseAmdSmiMetric(raw),
+    JSON.parse(readFileSync(new URL("expected.json", dir), "utf8")),
+  );
+});
+
+test("mabel later amd-smi shows edge and no clock", () => {
+  const dir = new URL("./fixtures/amd-smi/mabel-both/", import.meta.url);
+  const version = readFileSync(new URL("version.txt", dir), "utf8");
+  assert.match(version, /AMDSMI Tool: 26\.2\.1\+unknown/);
+  assert.match(version, /ROCm version: 10\.1\.0/);
+  const raw = readFileSync(new URL("metric.json", dir), "utf8");
+  assert.equal(JSON.parse(raw).gpu_data[0].clock.apu_average_gfxclk_frequency, undefined);
   assert.deepEqual(
     parseAmdSmiMetric(raw),
     JSON.parse(readFileSync(new URL("expected.json", dir), "utf8")),

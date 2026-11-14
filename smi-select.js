@@ -21,11 +21,7 @@ export function selectTool(preference, found) {
       : MISS;
   }
   if (amd) {
-    return {
-      id: "amd-smi",
-      path: amd,
-      allowEmptyFallback: rocm !== null,
-    };
+    return { id: "amd-smi", path: amd, allowEmptyFallback: false };
   }
   if (rocm) {
     return { id: "rocm-smi", path: rocm, allowEmptyFallback: false };

@@ -30,7 +30,7 @@ The official amd-smi help documents one snapshot command that can request clock,
 
 ## Goals
 
-*   With the preference at `auto`, when `rocm-smi` resolves, the first completed `amd-smi` sample must contain graphics clock, hotspot temperature, and used VRAM. If any of those is null, the extension does not paint that sample and binds `rocm-smi` for the rest of that enable. When `rocm-smi` does not resolve, a sample that has some of those numbers updates those labels and leaves the others on their placeholders. After a sample with all three numbers, later samples stay on that tool. A missing binary for the bound tool shows the short label and does not arm the timer.
+*   With the preference at `auto`, choose the backend once at enable: `amd-smi` when that binary resolves, otherwise `rocm-smi` when that binary resolves. An incomplete sample does not switch tools. The panel shows whatever the chosen backend returns, including `N/A` for a missing clock. A missing binary for the chosen tool shows the short label and does not arm the timer.
 *   A preferences combo and the GSettings key `smi-tool` can force `amd-smi` or `rocm-smi`. A forced tool that is missing does not switch to the other tool.
 *   The panel shows graphics clock in MHz, temperature in °C with the existing colors, and VRAM used through the existing byte formatter, for whichever tool produced the numbers.
 *   When the chosen binary cannot be resolved, the panel shows one short label and the journal gets one line. The 3-second timer is not armed.
@@ -54,12 +54,12 @@ The implementation plan below uses the decided column. Chris can reject a row be
 
 | Question | Decided for this design | Rejecting it changes |
 | --- | --- | --- |
-| Which tool wins when both exist? | `auto` starts on `amd-smi`. The first completed sample must have all three numbers. If any field is null, bind `rocm-smi` for the rest of that enable and do not paint the partial sample. Later samples stay on the bound tool. | The selector in `smi-select.js` and CUJ 8. |
+| Which tool wins when both exist? | `auto` chooses `amd-smi` once at enable and stays there. It does not switch to `rocm-smi` when a sample is incomplete. | `selectTool` and the indicator. |
 | Where is the force control? | GSettings string `smi-tool` and an `Adw.ComboRow`. Not an environment variable. | `prefs.js` and the schema. |
-| Which temperature sensor? | `rocm-smi` junction (`jun`). `amd-smi` hotspot when that value is a number. When hotspot is `"N/A"` or otherwise unusable, `temperature.apu_temperature_gfx`. Not edge, not memory. Same 70 / 85 colors. | The amd-smi field table. |
+| Which temperature sensor? | `amd-smi` hotspot, then `temperature.edge` when hotspot is unusable. `rocm-smi` junction, then edge when junction is absent. Not `apu_temperature_gfx`, not memory. The label says `edge` when that fallback is used. Same 70 / 85 colors. | The parsers and the temperature label. |
 | Which directories are searched? | gnome-shell `PATH`, then `/usr/bin/<name>`, then `/opt/rocm/bin/<name>`. | `resolveToolPath` in the implementation plan. |
 | Which shell versions? | `shell-version` is `["46", "50"]`. Keep `St.BoxLayout` `vertical: false`. Do not add `51`. | `metadata.json` and the box constructor. |
-| What if the captured JSON differs from the public samples? | Resolved by the mabel capture, plus the Strix Halo exception. The stdout is an object whose only top-level key is `gpu_data`. `clock.gfx_0.clk` and `temperature.hotspot` are the string `"N/A"`. The panel then uses `clock.apu_average_gfxclk_frequency` (830 MHz) and `temperature.apu_temperature_gfx` (39.12°C, shown as 39). `mem_usage.used_vram` is `{value: 951, unit: "MB"}`. Do not read `temperature.edge`. | `parse-amd-smi.js` and `tests/fixtures/amd-smi/`. |
+| What if the captured JSON differs from the public samples? | Three amd-smi documents are checked in. Mabel 27.1.0 uses `apu_average_gfxclk_frequency` (830 MHz) when `gfx_0` is `"N/A"`, and edge (39°C) when hotspot is `"N/A"`. The later mabel capture (AMDSMI 26.2.1, ROCm 10.1.0, `tests/fixtures/amd-smi/mabel-both/`) has every clock `"N/A"` and no APU clock, so the clock label is `N/A`, and edge is 39°C. Harlow 26.2.1 uses numeric `gfx_0` (334 MHz) and hotspot (36°C). | The parsers and fixtures. |
 
 ## Critical User Journeys (CUJs)
 
@@ -109,7 +109,7 @@ The implementation plan below uses the decided column. Chris can reject a row be
 
 *   **Given**: `smi-tool` is `auto`. Both binaries resolve. The first `amd-smi` process exits and at least one of clock, temperature, and VRAM is null. That includes all-`N/A`, a missing JSON node, and a shape the parser marks `unrecognized`.
 *   **When**: That first snapshot completes.
-*   **Then**: That sample is not painted. The journal line is `amd-gpu-rocm-info: amd-smi snapshot had no usable metrics; staying on rocm-smi path=%s`. If `unrecognized` is true, one additional line is `amd-gpu-rocm-info: unrecognized output tool=amd-smi stdout=%s` with stdout truncated as specified under Journal. Later ticks spawn only `rocm-smi`. They do not retry `amd-smi` until the next enable or a settings change. If there is no `rocm-smi` path, or `smi-tool` is `amd-smi`, this fallback does not happen. A partial sample then follows the panel rule: update labels for fields that are numbers, leave the others on their placeholders, and use `SMI unreadable` only when all three fields are null.
+*   **Then**: The extension stays on `amd-smi`. It paints the fields that sample contains. A missing clock is the label `N/A`. It does not spawn `rocm-smi`. The backend name stays visible. `SMI unreadable` is only for a sample whose clock, temperature, and VRAM are all null, with no fallback left, after the streak in the panel table.
 
 ### CUJ 9: The tool runs, but the output is not usable, and there is no fallback
 
@@ -169,11 +169,11 @@ The return is always that object. A miss is `{ id: null, path: null, allowEmptyF
 *   A `preference` other than `auto`, `amd-smi`, or `rocm-smi` is handled as `auto`.
 *   `amd-smi` with a path: `{ id: "amd-smi", path, allowEmptyFallback: false }`. Without a path: the miss object.
 *   `rocm-smi` with a path: `{ id: "rocm-smi", path, allowEmptyFallback: false }`. Without a path: the miss object.
-*   `auto` with an amd-smi path: `{ id: "amd-smi", path, allowEmptyFallback: true }` only when the rocm-smi path is also set. If rocm-smi is null, `allowEmptyFallback` is false.
+*   `auto` with an amd-smi path: `{ id: "amd-smi", path, allowEmptyFallback: false }` whether or not rocm-smi is also present.
 *   `auto` with only a rocm-smi path: `{ id: "rocm-smi", path, allowEmptyFallback: false }`.
 *   `auto` with both null: the miss object.
 
-`allowEmptyFallback` means the first completed amd-smi sample of this enable may bind rocm-smi. The indicator calls `selectTool("rocm-smi", found)` once for that bind. It does so when any of the three fields is null, not only when all three are null. It does not paint that partial amd-smi sample. It does not call amd-smi again until the next enable or a settings change. A generation mismatch or a destroy-in-progress returns before this bind.
+`allowEmptyFallback` is always false. The choice is made once in `start` and is not revised after a sample. A missing field is painted as `N/A` or as the same-backend substitute below. It is not a reason to spawn the other tool.
 
 ### Path lookup
 
@@ -231,11 +231,15 @@ Both parsers return:
 
 On that capture:
 
-*   `clock.gfx_0.clk` is the string `"N/A"`, not `{value, unit}`. `clock.apu_average_gfxclk_frequency` is `{value: 830, unit: "MHz"}`. `gfxClockMhz` is 830.
-*   `temperature.hotspot` is the string `"N/A"`. `temperature.apu_temperature_gfx` is `{value: 39.12, unit: "C"}`. `junctionTempC` is `parseInt(39.12, 10)`, which is 39. `temperature.edge` is `{value: 39, unit: "C"}` and is not read.
+*   `clock.gfx_0.clk` is the string `"N/A"`. `clock.apu_average_gfxclk_frequency` is `{value: 830, unit: "MHz"}`. `gfxClockMhz` is 830 and `clockSource` is `apu_average_gfxclk`.
+*   `temperature.hotspot` is the string `"N/A"`. `temperature.edge` is `{value: 39, unit: "C"}`. `junctionTempC` is 39 and `tempSource` is `edge`. `temperature.apu_temperature_gfx` is `{value: 39.12, unit: "C"}` and is not read.
 *   `mem_usage.used_vram` is `{value: 951, unit: "MB"}`. `vramUsedBytes` is `951 * 1024 * 1024` = 997195776.
 
-A string `"N/A"` is unusable and does not throw. A numeric `clock.gfx_0.clk` or `temperature.hotspot` is used even when the APU fields are also present. The APU fields are read only when the discrete field is missing, `"N/A"`, or not a finite number with a matching unit. Those parser results are the three readings the first-sample check uses, so a complete Strix Halo sample does not fall back to `rocm-smi`.
+The later mabel capture is `tests/fixtures/amd-smi/mabel-both/`. `amd-smi version` printed `AMDSMI Tool: 26.2.1+unknown | AMDSMI Library version: 26.2.1 | ROCm version: 10.1.0`. `clock.gfx_0.clk` is `"N/A"`, `apu_average_gfxclk_frequency` is absent, and the other clock nodes in that file are `"N/A"`, so `gfxClockMhz` is null and the panel clock label is `N/A`. `temperature.hotspot` is `"N/A"`. `temperature.edge` is `{value: 39, unit: "C"}`, so the temperature label is `39°C edge`. `mem_usage.used_vram` is `{value: 957, unit: "MB"}`, so `vramUsedBytes` is `957 * 1024 * 1024` = 1003487232.
+
+That same machine's `rocm-smi` stdout is `tests/fixtures/rocm-smi/mabel-both/`. `sclk` is `(813Mhz)`. There is no junction line. Edge is `39.0`, so the temperature label is `39°C edge`. `VRAM Total Used Memory (B)` is 1004412928. `rocm-smi --version` printed `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0`.
+
+A string `"N/A"` is unusable and does not throw. A numeric `clock.gfx_0.clk` or `temperature.hotspot` is used even when another field is also present. `apu_average_gfxclk_frequency` is read only when `gfx_0.clk` is unusable and that APU field exists. Edge is read only when hotspot (amd-smi) or junction (rocm-smi) is unusable. The panel shows the backend name, and it shows the word `edge` when the temperature came from edge. An incomplete sample stays on the backend chosen at enable.
 
 Harlow's discrete amd-smi capture is `tests/fixtures/amd-smi/harlow/metric.json`, from AMDSMI Tool 26.2.1+unknown, library 26.2.1. `clock.gfx_0.clk` is `{value: 334, unit: "MHz"}`, so `gfxClockMhz` is 334. `clock.gfx_1.clk` through `clock.gfx_7.clk` are the string `"N/A"` and are not read. `temperature.hotspot` is `{value: 36, unit: "C"}`, so `junctionTempC` is 36. `mem_usage.used_vram` is `{value: 3849, unit: "MB"}`, so `vramUsedBytes` is `3849 * 1024 * 1024` = 4035969024. There is no `apu_average_gfxclk_frequency` or `apu_temperature_gfx` on that document. A numeric `gfx_0.clk` and hotspot stay the fields; the Strix Halo substitutes are not used.
 
@@ -246,8 +250,8 @@ Parser steps. A missing node or a string `"N/A"` yields null for that field and 
 1. `JSON.parse`. A throw returns three nulls and `unrecognized: true`.
 2. If the value is an array, search it. If it is an object and `gpu_data` is an array, search that array. Any other top-level shape returns three nulls and `unrecognized: true`. The mabel capture uses the `gpu_data` branch.
 3. Select the first element in array order whose `gpu` property is the number `0`. If none, three nulls and `unrecognized: true`. Do not substitute another GPU.
-4. Clock: `clock.gfx_0.clk` is usable only when `value` is a finite number and `unit` is `MHz`. Store `Math.trunc(value)`. Read `clk`, not `min_clk` or `max_clk`. The string `"N/A"` is unusable. When `clk` is unusable, use `clock.apu_average_gfxclk_frequency` with the same unit rule. If that is also unusable, the clock is null.
-5. Temperature: `temperature.hotspot` is usable only when `value` is a finite number and `unit` is `C` or `°C`. Store `parseInt(value, 10)`. A `NaN` result is unusable. The string `"N/A"` is unusable. When hotspot is unusable, use `temperature.apu_temperature_gfx` with the same unit rule and `parseInt`. Do not read `edge` or `mem`.
+4. Clock: `clock.gfx_0.clk` is usable only when `value` is a finite number and `unit` is `MHz`. Store `Math.trunc(value)` and set `clockSource` to `gfx_0`. Read `clk`, not `min_clk` or `max_clk`. The string `"N/A"` is unusable. When `clk` is unusable, use `clock.apu_average_gfxclk_frequency` with the same unit rule and set `clockSource` to `apu_average_gfxclk`. If that is missing or unusable, the clock is null and `clockSource` is null. The panel then shows `N/A`.
+5. Temperature: `temperature.hotspot` is usable only when `value` is a finite number and `unit` is `C` or `°C`. Store `parseInt(value, 10)` and set `tempSource` to `hotspot`. The string `"N/A"` is unusable. When hotspot is unusable, use `temperature.edge` with the same unit rule and `parseInt`, and set `tempSource` to `edge`. Do not read `apu_temperature_gfx` or `mem`. For `rocm-smi`, use the junction line first and the edge line only when junction is absent; `tempSource` is `junction` or `edge`. The temperature label includes the word `edge` when `tempSource` is `edge`.
 6. VRAM: `mem_usage.used_vram` is usable only when `value` is a finite number and `unit` is `MB` or `B`. `MB` means `Math.trunc(value * 1024 * 1024)`. `B` means `Math.trunc(value)`. Any other unit, or a missing unit, is null. Do not assume MB. A negative result is null.
 
 `unrecognized` is false when step 3 finds GPU 0, even if steps 4–6 are null. `tests/fixtures/amd-smi/version.txt` is the mabel `amd-smi version` stdout. `tests/fixtures/amd-smi/expected.json` is the four-field result of these steps on `metric.json`.
@@ -308,7 +312,6 @@ Journal lines go through `console.error` with the sentence already substituted. 
 
 *   `amd-gpu-rocm-info: using tool=%s path=%s preference=%s`
 *   `amd-gpu-rocm-info: no tool preference=%s amd=%s rocm=%s fallback=%s` where `fallback` is `no` when the preference is not `auto`, and `n/a` when it is `auto`
-*   `amd-gpu-rocm-info: amd-smi snapshot had no usable metrics; staying on rocm-smi path=%s`
 *   `amd-gpu-rocm-info: command failed tool=%s exit=%s stderr=%s` for a non-zero exit whose stdout still parsed as recognized
 *   `amd-gpu-rocm-info: unrecognized output tool=%s stdout=%s` when `unrecognized` is true. For a UTF-8 finish error, `stdout` is the error message.
 *   `amd-gpu-rocm-info: no usable metrics tool=%s` when all three fields are null and `unrecognized` is false
@@ -354,7 +357,7 @@ one sample (1 amd-smi process, or 3 rocm-smi processes)
         v
 pure parser --> { gfxClockMhz, junctionTempC, vramUsedBytes, unrecognized }
         |
-        +-- first amd-smi sample, any field null, allowEmptyFallback --> bind rocm-smi once
+        +-- missing field stays on the chosen backend and is painted as N/A or the same-tool substitute
         |
         v
 format-metrics.js --> label text and temp class

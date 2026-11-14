@@ -1,6 +1,8 @@
 {
   "gfxClockMhz": 830,
   "junctionTempC": 39,
+  "clockSource": "apu_average_gfxclk",
+  "tempSource": "edge",
   "vramUsedBytes": 997195776,
   "unrecognized": false
 }
