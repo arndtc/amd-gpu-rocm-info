@@ -56,10 +56,10 @@ The implementation plan below uses the decided column. Chris can reject a row be
 | --- | --- | --- |
 | Which tool wins when both exist? | `auto` starts on `amd-smi`. The first completed sample must have all three numbers. If any field is null, bind `rocm-smi` for the rest of that enable and do not paint the partial sample. Later samples stay on the bound tool. | The selector in `smi-select.js` and CUJ 8. |
 | Where is the force control? | GSettings string `smi-tool` and an `Adw.ComboRow`. Not an environment variable. | `prefs.js` and the schema. |
-| Which temperature sensor? | `rocm-smi` junction (`jun`). `amd-smi` hotspot. Not edge, not memory. Same 70 / 85 colors. | The amd-smi field table. |
+| Which temperature sensor? | `rocm-smi` junction (`jun`). `amd-smi` hotspot when that value is a number. When hotspot is `"N/A"` or otherwise unusable, `temperature.apu_temperature_gfx`. Not edge, not memory. Same 70 / 85 colors. | The amd-smi field table. |
 | Which directories are searched? | gnome-shell `PATH`, then `/usr/bin/<name>`, then `/opt/rocm/bin/<name>`. | `resolveToolPath` in the implementation plan. |
 | Which shell versions? | `shell-version` is `["46", "50"]`. Keep `St.BoxLayout` `vertical: false`. Do not add `51`. | `metadata.json` and the box constructor. |
-| What if the captured JSON differs from the public samples? | Resolved by the mabel capture. The stdout is an object whose only top-level key is `gpu_data`. `clock.gfx_0.clk` and `temperature.hotspot` are the string `"N/A"`. `mem_usage.used_vram` is `{value: 951, unit: "MB"}`. Do not read `temperature.edge` or `clock.apu_average_gfxclk_frequency`. | `parse-amd-smi.js` and `tests/fixtures/amd-smi/`. |
+| What if the captured JSON differs from the public samples? | Resolved by the mabel capture, plus the Strix Halo exception. The stdout is an object whose only top-level key is `gpu_data`. `clock.gfx_0.clk` and `temperature.hotspot` are the string `"N/A"`. The panel then uses `clock.apu_average_gfxclk_frequency` (830 MHz) and `temperature.apu_temperature_gfx` (39.12°C, shown as 39). `mem_usage.used_vram` is `{value: 951, unit: "MB"}`. Do not read `temperature.edge`. | `parse-amd-smi.js` and `tests/fixtures/amd-smi/`. |
 
 ## Critical User Journeys (CUJs)
 
@@ -217,7 +217,7 @@ Both parsers return:
   unrecognized: boolean }
 ```
 
-`junctionTempC` is the panel temperature. For `rocm-smi` it comes from the junction line. For `amd-smi` it comes from `temperature.hotspot`. It is not a JSON key named `junctionTempC`.
+`junctionTempC` is the panel temperature. For `rocm-smi` it comes from the junction line. For `amd-smi` it comes from `temperature.hotspot` when that value is usable, and otherwise from `temperature.apu_temperature_gfx`. It is not a JSON key named `junctionTempC`.
 
 `null` means "this field is not usable". It is not zero. The string `"N/A"`, a missing node, and a non-object intermediate are null for that field and do not throw. `unrecognized` is true only for invalid JSON, a top-level shape other than an array or `{ gpu_data: array }`, or no element with `gpu === 0`. All-`N/A` on a recognized GPU 0 is `unrecognized: false` and three nulls.
 
@@ -231,11 +231,11 @@ Both parsers return:
 
 On that capture:
 
-*   `clock.gfx_0.clk` is the string `"N/A"`, not `{value, unit}`. `gfxClockMhz` is null. `clock.apu_average_gfxclk_frequency` is `{value: 830, unit: "MHz"}` and is not read.
-*   `temperature.hotspot` is the string `"N/A"`. `junctionTempC` is null. `temperature.edge` is `{value: 39, unit: "C"}` and is not read.
+*   `clock.gfx_0.clk` is the string `"N/A"`, not `{value, unit}`. `clock.apu_average_gfxclk_frequency` is `{value: 830, unit: "MHz"}`. `gfxClockMhz` is 830.
+*   `temperature.hotspot` is the string `"N/A"`. `temperature.apu_temperature_gfx` is `{value: 39.12, unit: "C"}`. `junctionTempC` is `parseInt(39.12, 10)`, which is 39. `temperature.edge` is `{value: 39, unit: "C"}` and is not read.
 *   `mem_usage.used_vram` is `{value: 951, unit: "MB"}`. `vramUsedBytes` is `951 * 1024 * 1024` = 997195776.
 
-A string `"N/A"` is null and does not throw. A `{value, unit}` object is still the usable form when a later capture has a numeric `clock.gfx_0.clk` or `temperature.hotspot`.
+A string `"N/A"` is unusable and does not throw. A numeric `clock.gfx_0.clk` or `temperature.hotspot` is used even when the APU fields are also present. The APU fields are read only when the discrete field is missing, `"N/A"`, or not a finite number with a matching unit. Those parser results are the three readings the first-sample check uses, so a complete Strix Halo sample does not fall back to `rocm-smi`.
 
 Harlow has no amd-smi stdout. Its `rocm-smi` stdout is under `tests/fixtures/rocm-smi/captured/`. `--showclocks` includes `sclk clock level: S: (0Mhz)`, so `gfxClockMhz` is 0. `--showtemp` includes `Temperature (Sensor junction) (C): 35.0`, so `junctionTempC` is 35. `--showmeminfo vram` includes `VRAM Total Used Memory (B): 3979702272`. Each command exited 0. stderr, not stdout, is `WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status`. The parser reads stdout. That warning line does not match the sclk, junction, or Used patterns, so a copy of it in the text does not change the three numbers.
 
@@ -244,8 +244,8 @@ Parser steps. A missing node or a string `"N/A"` yields null for that field and 
 1. `JSON.parse`. A throw returns three nulls and `unrecognized: true`.
 2. If the value is an array, search it. If it is an object and `gpu_data` is an array, search that array. Any other top-level shape returns three nulls and `unrecognized: true`. The mabel capture uses the `gpu_data` branch.
 3. Select the first element in array order whose `gpu` property is the number `0`. If none, three nulls and `unrecognized: true`. Do not substitute another GPU.
-4. Clock: `clock.gfx_0.clk` is usable only when `value` is a finite number and `unit` is `MHz`. Store `Math.trunc(value)`. Read `clk`, not `min_clk`, `max_clk`, or `apu_average_gfxclk_frequency`. The string `"N/A"` is null.
-5. Temperature: `temperature.hotspot` is usable only when `value` is a finite number and `unit` is `C` or `°C`. Store `parseInt(value, 10)`. A `NaN` result is null. The string `"N/A"` is null. Do not read `edge` or `mem`.
+4. Clock: `clock.gfx_0.clk` is usable only when `value` is a finite number and `unit` is `MHz`. Store `Math.trunc(value)`. Read `clk`, not `min_clk` or `max_clk`. The string `"N/A"` is unusable. When `clk` is unusable, use `clock.apu_average_gfxclk_frequency` with the same unit rule. If that is also unusable, the clock is null.
+5. Temperature: `temperature.hotspot` is usable only when `value` is a finite number and `unit` is `C` or `°C`. Store `parseInt(value, 10)`. A `NaN` result is unusable. The string `"N/A"` is unusable. When hotspot is unusable, use `temperature.apu_temperature_gfx` with the same unit rule and `parseInt`. Do not read `edge` or `mem`.
 6. VRAM: `mem_usage.used_vram` is usable only when `value` is a finite number and `unit` is `MB` or `B`. `MB` means `Math.trunc(value * 1024 * 1024)`. `B` means `Math.trunc(value)`. Any other unit, or a missing unit, is null. Do not assume MB. A negative result is null.
 
 `unrecognized` is false when step 3 finds GPU 0, even if steps 4–6 are null. `tests/fixtures/amd-smi/version.txt` is the mabel `amd-smi version` stdout. `tests/fixtures/amd-smi/expected.json` is the four-field result of these steps on `metric.json`.
@@ -442,8 +442,8 @@ There is no stored setting today. The default `auto` is the new behavior. Disabl
 ### Risks and mitigations
 
 *   **Wrong VRAM scale.** Public samples label used VRAM as `MB`. Passing that number through `formatBytes` as bytes divides the displayed size by 1024². Mitigation: multiply only when `unit` is `MB`, by 1024², then `Math.trunc`. A missing unit is null. `expected.json` is the check.
-*   **Hotspot is not the junction number.** The panel does not print the sensor name. The 70 and 85 classes follow hotspot for `amd-smi` and junction for `rocm-smi`, including when those two numbers disagree. The readme says that. Edge is not a stand-in. The accessible name stays `AMD GPU Monitor`.
-*   **JSON envelope on mabel.** The capture is a `gpu_data` object. `clock.gfx_0.clk` and `temperature.hotspot` are `"N/A"`, so those labels stay empty and VRAM still updates. `temperature.edge` and `clock.apu_average_gfxclk_frequency` are not read. A wedged sample is CUJ 11. Three all-null samples with no fallback remove the timer.
+*   **Hotspot is not the junction number.** The panel does not print the sensor name. The 70 and 85 classes follow the amd-smi temperature the parser returns (hotspot, or `apu_temperature_gfx` when hotspot is unusable) and the rocm-smi junction. Edge is not a stand-in. The accessible name stays `AMD GPU Monitor`.
+*   **JSON envelope on mabel.** The capture is a `gpu_data` object. `clock.gfx_0.clk` and `temperature.hotspot` are `"N/A"`. The panel uses `apu_average_gfxclk_frequency` (830 MHz) and `apu_temperature_gfx` (39.12°C, shown as 39). `temperature.edge` is not read. A wedged sample is CUJ 11. Three all-null samples with no fallback remove the timer.
 *   **gnome-shell PATH omits `/opt/rocm/bin`.** A terminal can find the tool while the extension reports it missing. Mitigation: the two absolute directories above.
 *   **Late callback after destroy or after a tool switch.** Mitigation: generation plus `Gio.Cancellable` plus `force_exit`.
 *   **Schema not compiled.** `getSettings()` throws and the extension fails enable. Mitigation: the readme's `glib-compile-schemas schemas` step. A throw during enable is logged once by the shell; the extension does not loop.

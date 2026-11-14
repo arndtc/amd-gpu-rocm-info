@@ -39,8 +39,16 @@ export function parseAmdSmiMetric(stdout) {
   const gpu = list.find((entry) => asObject(entry)?.gpu === 0);
   if (!gpu) return { ...EMPTY };
 
-  const clock = finiteUnit(asObject(gpu.clock)?.gfx_0?.clk, ["MHz"]);
-  const temp = finiteUnit(asObject(gpu.temperature)?.hotspot, ["C", "°C"]);
+  const clockNode = asObject(gpu.clock);
+  const tempNode = asObject(gpu.temperature);
+  let clock = finiteUnit(clockNode?.gfx_0?.clk, ["MHz"]);
+  if (clock === null) {
+    clock = finiteUnit(clockNode?.apu_average_gfxclk_frequency, ["MHz"]);
+  }
+  let temp = finiteUnit(tempNode?.hotspot, ["C", "°C"]);
+  if (temp === null) {
+    temp = finiteUnit(tempNode?.apu_temperature_gfx, ["C", "°C"]);
+  }
   const vram = finiteUnit(asObject(gpu.mem_usage)?.used_vram, ["MB", "B"]);
 
   let vramUsedBytes = null;

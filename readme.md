@@ -14,6 +14,8 @@ Commands, with the absolute path of the binary that was found:
 
 The panel shows the graphics clock in MHz, temperature in °C, and VRAM used. For `amd-smi`, temperature is the hotspot sensor. For `rocm-smi`, temperature is the junction sensor. Above 70°C the temperature is warm. Above 85°C it is high. 70 and 85 stay on the cooler side of those lines.
 
+Strix Halo reports `clock.gfx_0.clk` and `temperature.hotspot` as `N/A`. The panel then uses the APU average gfx clock (`clock.apu_average_gfxclk_frequency`) and the APU gfx temperature (`temperature.apu_temperature_gfx`). Discrete numbers are kept when they are real.
+
 Samples run every 3 seconds while the screen is unlocked and a tool is bound. Locking the screen stops them. If the chosen binary cannot be found, the panel shows one of `no SMI tool`, `no amd-smi`, or `no rocm-smi`, and it does not keep launching a process. If a bound tool returns no numbers and there is nothing to fall back to, the panel shows `SMI unreadable`.
 
 Lookup order for each name is the session `PATH`, then `/usr/bin/<name>`, then `/opt/rocm/bin/<name>`.

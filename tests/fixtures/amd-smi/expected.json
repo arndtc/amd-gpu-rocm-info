@@ -1,6 +1,6 @@
 {
-  "gfxClockMhz": null,
-  "junctionTempC": null,
+  "gfxClockMhz": 830,
+  "junctionTempC": 39,
   "vramUsedBytes": 997195776,
   "unrecognized": false
 }

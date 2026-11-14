@@ -52,7 +52,28 @@ test("used_vram without a unit is null", () => {
   });
 });
 
-test("clk value N/A is null", () => {
+test("discrete clock and hotspot win over APU fields", () => {
+  const sample = structuredClone(gpu0);
+  sample.clock.apu_average_gfxclk_frequency = { value: 830, unit: "MHz" };
+  sample.temperature.apu_temperature_gfx = { value: 39.12, unit: "C" };
+  assert.deepEqual(parseAmdSmiMetric(JSON.stringify([sample])), parsedGpu0);
+});
+
+test("N/A discrete fields fall back to the APU gfx clock and temperature", () => {
+  const sample = structuredClone(gpu0);
+  sample.clock.gfx_0.clk = "N/A";
+  sample.temperature.hotspot = "N/A";
+  sample.clock.apu_average_gfxclk_frequency = { value: 830, unit: "MHz" };
+  sample.temperature.apu_temperature_gfx = { value: 39.12, unit: "C" };
+  assert.deepEqual(parseAmdSmiMetric(JSON.stringify([sample])), {
+    gfxClockMhz: 830,
+    junctionTempC: 39,
+    vramUsedBytes: 2097152,
+    unrecognized: false,
+  });
+});
+
+test("clk value N/A is null when no APU clock is present", () => {
   const sample = structuredClone(gpu0);
   sample.clock.gfx_0.clk = "N/A";
   assert.deepEqual(parseAmdSmiMetric(JSON.stringify([sample])), {
