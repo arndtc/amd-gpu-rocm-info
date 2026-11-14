@@ -1,7 +1,7 @@
 # amd-smi and rocm-smi interchangeability
 
 *   **Author:** Cursor Agent (requested by Chris)
-*   **Status:** Proposed
+*   **Status:** Approved
 *   **Date:** 2026-11-14
 
 --------------------------------------------------------------------------------

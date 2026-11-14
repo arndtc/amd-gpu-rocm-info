@@ -2,3 +2,4 @@
 .vscode
 deploy.sh
 amd-gpu-rocm-info@black-hat.zip
+schemas/gschemas.compiled

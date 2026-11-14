@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.amd-gpu-rocm-info" path="/org/gnome/shell/extensions/amd-gpu-rocm-info/">
+    <key name="smi-tool" type="s">
+      <default>'auto'</default>
+      <summary>Which SMI tool to query</summary>
+      <description>auto, amd-smi, or rocm-smi. Any other value is treated as auto.</description>
+    </key>
+  </schema>
+</schemalist>
