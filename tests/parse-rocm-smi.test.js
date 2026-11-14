@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { parseRocmSmi } from "../parse-rocm-smi.js";
@@ -55,19 +55,34 @@ test("a temperature block without junction leaves that field null", () => {
   );
 });
 
-test("captured rocm-smi 7.1.1 stdout", () => {
+test("harlow rocm-smi stdout", () => {
   const dir = new URL("./fixtures/rocm-smi/captured/", import.meta.url);
-  const expectedPath = new URL("expected.json", dir);
-  if (!existsSync(expectedPath)) {
-    throw new Error("captured rocm-smi fixture missing");
-  }
-  const expected = JSON.parse(readFileSync(expectedPath, "utf8"));
   const read = (name) => readFileSync(new URL(name, dir), "utf8");
+  const version = read("version.txt");
+  assert.match(version, /ROCM-SMI version: 4\.0\.0\+unknown/);
+  assert.match(version, /ROCM-SMI-LIB version: 7\.8\.0/);
+  const expected = JSON.parse(read("expected.json"));
   assert.deepEqual(
     parseRocmSmi({
       clocks: read("showclocks.txt"),
       temp: read("showtemp.txt"),
       vram: read("showmeminfo-vram.txt"),
+    }),
+    expected,
+  );
+});
+
+test("harlow low-power stderr warning does not change the parse", () => {
+  const dir = new URL("./fixtures/rocm-smi/captured/", import.meta.url);
+  const read = (name) => readFileSync(new URL(name, dir), "utf8");
+  const warning = read("low-power.stderr");
+  assert.match(warning, /low-power state/);
+  const expected = JSON.parse(read("expected.json"));
+  assert.deepEqual(
+    parseRocmSmi({
+      clocks: `${warning}\n${read("showclocks.txt")}`,
+      temp: `${warning}\n${read("showtemp.txt")}`,
+      vram: `${warning}\n${read("showmeminfo-vram.txt")}`,
     }),
     expected,
   );

@@ -8,7 +8,9 @@
 
 ## Overview
 
-This extension shows three AMD GPU readings in the GNOME top panel: graphics clock, temperature, and VRAM used. Today those readings come only from `rocm-smi`. The design target is the Ubuntu archive packages named for this work, `amd-smi` 7.2.0 and `rocm-smi` 7.1.1, on GNOME Shell 46 and GNOME Shell 50. The [amd-smi 7.2.0 CLI guide](https://rocm.docs.amd.com/projects/amdsmi/en/docs-7.2.0/how-to/amdsmi-cli-tool.html) says the tool "is intended to replace and deprecate the existing `rocm_smi` CLI tool". The panel should keep showing the same three readings when the machine has `amd-smi`, `rocm-smi`, both, or neither, without spawning a missing binary every 3 seconds.
+This extension shows three AMD GPU readings in the GNOME top panel: graphics clock, temperature, and VRAM used. Today those readings come only from `rocm-smi`. It runs on GNOME Shell 46 and GNOME Shell 50. The [amd-smi 7.2.0 CLI guide](https://rocm.docs.amd.com/projects/amdsmi/en/docs-7.2.0/how-to/amdsmi-cli-tool.html) says the tool "is intended to replace and deprecate the existing `rocm_smi` CLI tool". The panel should keep showing the same three readings when the machine has `amd-smi`, `rocm-smi`, both, or neither, without spawning a missing binary every 3 seconds.
+
+The captures in `tests/fixtures/` are from the test machines, not from the Ubuntu archive versions 7.2.0 and 7.1.1 that this design was first written against. Mabel has `/usr/bin/amd-smi` and no `rocm-smi`. `amd-smi version` printed `AMDSMI Tool: 27.1.0+7da43026 | AMDSMI Library version: 27.1.0 | ROCm version: 10.1.0`. Harlow has no `amd-smi`. `/usr/bin/rocm-smi` printed `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0`.
 
 The extension uuid stays `amd-gpu-rocm-info@black-hat`. The indicator stays at `Main.panel.addToStatusArea(uuid, indicator, 1, "left")`.
 
@@ -24,7 +26,7 @@ Each child parses its own stdout with a regex and writes one label. When `rocm-s
 
 A machine that has `amd-smi` and no `rocm-smi` gets no readings. A machine that has both still runs only `rocm-smi`. There is no setting to choose.
 
-The official `amd-smi` 7.2.0 help documents one snapshot command that can request clock, temperature, and memory usage together, with `--json`. It does not publish the JSON keys. This design does not treat an unseen JSON body as known.
+The official amd-smi help documents one snapshot command that can request clock, temperature, and memory usage together, with `--json`. The mabel capture of that command is the JSON contract in the parse section.
 
 ## Goals
 
@@ -41,7 +43,7 @@ The official `amd-smi` 7.2.0 help documents one snapshot command that can reques
 *   Choosing among several GPUs. The reading is GPU 0, matching today's first matching line.
 *   Power, fan, utilization, encoder clocks, or a sysfs / hwmon reader.
 *   `amd-smi --watch` or `rocm-smi` watch loops.
-*   A runtime check that the binary's version string is 7.2.0 or 7.1.1. Those are the CLI-doc versions this design is written against. Any other version is the binary that was found. Unreadable stdout takes the unrecognized-output path.
+*   A runtime check of the tool version. Mabel's amd-smi is 27.1.0 and harlow's rocm-smi is 4.0.0+unknown / library 7.8.0. Any other version is the binary that was found. Unreadable stdout takes the unrecognized-output path.
 *   Collapsing the three `rocm-smi` commands into one argv. That waits on a captured combined stdout that yields the same three numbers.
 *   GNOME Shell 51, a panel menu, gettext catalogs, a change to the indicator position, a change to the uuid, or a change to the upstream URL.
 *   Editing `stylesheet.css`, including the unused `.gpu-monitor-icon` rules and the `.system-status-icon` rule.
@@ -57,7 +59,7 @@ The implementation plan below uses the decided column. Chris can reject a row be
 | Which temperature sensor? | `rocm-smi` junction (`jun`). `amd-smi` hotspot. Not edge, not memory. Same 70 / 85 colors. | The amd-smi field table. |
 | Which directories are searched? | gnome-shell `PATH`, then `/usr/bin/<name>`, then `/opt/rocm/bin/<name>`. | `resolveToolPath` in the implementation plan. |
 | Which shell versions? | `shell-version` is `["46", "50"]`. Keep `St.BoxLayout` `vertical: false`. Do not add `51`. | `metadata.json` and the box constructor. |
-| What if Ubuntu 7.2.0 JSON differs from the public samples? | The field table is a hypothesis. The captured fixture wins. Update this table before treating the parser as done. Do not add extra guessed paths in code. | `parse-amd-smi.js` only, after this document changes. |
+| What if the captured JSON differs from the public samples? | Resolved by the mabel capture. The stdout is an object whose only top-level key is `gpu_data`. `clock.gfx_0.clk` and `temperature.hotspot` are the string `"N/A"`. `mem_usage.used_vram` is `{value: 951, unit: "MB"}`. Do not read `temperature.edge` or `clock.apu_average_gfxclk_frequency`. | `parse-amd-smi.js` and `tests/fixtures/amd-smi/`. |
 
 ## Critical User Journeys (CUJs)
 
@@ -225,25 +227,28 @@ Both parsers return:
 *   Temperature: `stdout.match(/.*jun.*: ([0-9.]+).*/i)`, then `parseInt`. The current class is `/.*jun.*: ([\d|\.]+).*/i`. The new class drops the pipe character and keeps the `+`. `parseInt` of a non-numeric match is null, not `NaN` on the label. No `jun` line yields null.
 *   VRAM: `stdout.match(/.*Used.*: (\d+).*/i)`, then `parseInt`, as bytes. No match yields null.
 
-`parse-amd-smi.js` takes the single stdout string, `JSON.parse`s it, and reads GPU 0. This table is a hypothesis, not a schema from the 7.2.0 manual. The manual's help text has no JSON body. Two public reports disagree on the envelope and are cited so the parser can recognize both without inventing keys inside them:
+`parse-amd-smi.js` takes the single stdout string, `JSON.parse`s it, and reads GPU 0. The mabel capture of `amd-smi metric --gpu 0 --clock --temperature --mem-usage --json` is `tests/fixtures/amd-smi/metric.json`. It is a JSON object whose only top-level key is `gpu_data`. There is no top-level `memory-usage` key. `gpu_data[0]` holds `gpu`, `clock`, `temperature`, and `mem_usage`. `gpu` is the number 0.
 
-*   Top-level array of objects, from a user `amd-smi metric --json` paste on [Beszel issue 737](https://github.com/henrygd/beszel/issues/737). The `amd-smi` version is not stated. The pasted object has `clock.gfx_0.clk` `{value, unit: "MHz"}`, `temperature.hotspot` `{value, unit: "C"}`, and `mem_usage.used_vram` `{value, unit: "MB"}`.
-*   An object with a `gpu_data` array, from [amdsmi issue 134](https://github.com/ROCm/amdsmi/issues/134) on ROCm 7.0.2. That report shows `usage`, not the clock or VRAM keys.
+On that capture:
 
-The [ROCm 7.1 changelog](https://github.com/ROCm/amdsmi/blob/release/rocm-rel-7.1/CHANGELOG.md) shows a human-readable `amd-smi metric` example with `CLOCK / GFX_0 / CLK`, `TEMPERATURE / HOTSPOT` in °C, and `MEM_USAGE / USED_VRAM` in MB. That is not a JSON document. The Beszel paste used `amd-smi metric --json` with no metric flags, which this design does not run. The keys are a hypothesis until the filtered command is captured.
+*   `clock.gfx_0.clk` is the string `"N/A"`, not `{value, unit}`. `gfxClockMhz` is null. `clock.apu_average_gfxclk_frequency` is `{value: 830, unit: "MHz"}` and is not read.
+*   `temperature.hotspot` is the string `"N/A"`. `junctionTempC` is null. `temperature.edge` is `{value: 39, unit: "C"}` and is not read.
+*   `mem_usage.used_vram` is `{value: 951, unit: "MB"}`. `vramUsedBytes` is `951 * 1024 * 1024` = 997195776.
 
-Parser steps. A missing or non-object parent yields null for that field and does not throw:
+A string `"N/A"` is null and does not throw. A `{value, unit}` object is still the usable form when a later capture has a numeric `clock.gfx_0.clk` or `temperature.hotspot`.
+
+Harlow has no amd-smi stdout. Its `rocm-smi` stdout is under `tests/fixtures/rocm-smi/captured/`. `--showclocks` includes `sclk clock level: S: (0Mhz)`, so `gfxClockMhz` is 0. `--showtemp` includes `Temperature (Sensor junction) (C): 35.0`, so `junctionTempC` is 35. `--showmeminfo vram` includes `VRAM Total Used Memory (B): 3979702272`. Each command exited 0. stderr, not stdout, is `WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status`. The parser reads stdout. That warning line does not match the sclk, junction, or Used patterns, so a copy of it in the text does not change the three numbers.
+
+Parser steps. A missing node or a string `"N/A"` yields null for that field and does not throw:
 
 1. `JSON.parse`. A throw returns three nulls and `unrecognized: true`.
-2. If the value is an array, search it. If it is an object and `gpu_data` is an array, search that array. Any other top-level shape returns three nulls and `unrecognized: true`.
+2. If the value is an array, search it. If it is an object and `gpu_data` is an array, search that array. Any other top-level shape returns three nulls and `unrecognized: true`. The mabel capture uses the `gpu_data` branch.
 3. Select the first element in array order whose `gpu` property is the number `0`. If none, three nulls and `unrecognized: true`. Do not substitute another GPU.
-4. Clock: `clock.gfx_0.clk` is usable only when `value` is a finite number and `unit` is `MHz`. Store `Math.trunc(value)`. Read `clk`, not `min_clk` or `max_clk`. Otherwise null.
-5. Temperature: `temperature.hotspot` is usable only when `value` is a finite number and `unit` is `C` or `°C`. Store `parseInt(value, 10)`. A `NaN` result is null. Do not read `edge` or `mem`.
+4. Clock: `clock.gfx_0.clk` is usable only when `value` is a finite number and `unit` is `MHz`. Store `Math.trunc(value)`. Read `clk`, not `min_clk`, `max_clk`, or `apu_average_gfxclk_frequency`. The string `"N/A"` is null.
+5. Temperature: `temperature.hotspot` is usable only when `value` is a finite number and `unit` is `C` or `°C`. Store `parseInt(value, 10)`. A `NaN` result is null. The string `"N/A"` is null. Do not read `edge` or `mem`.
 6. VRAM: `mem_usage.used_vram` is usable only when `value` is a finite number and `unit` is `MB` or `B`. `MB` means `Math.trunc(value * 1024 * 1024)`. `B` means `Math.trunc(value)`. Any other unit, or a missing unit, is null. Do not assume MB. A negative result is null.
 
-`unrecognized` is false when step 3 finds GPU 0, even if steps 4–6 are null.
-
-If `tests/fixtures/amd-smi/metric.json` from `amd-smi metric --gpu 0 --clock --temperature --mem-usage --json` does not follow these steps, stop. Update this table to that file, then change the parser and replace the inline unit-test objects so they match the captured shape. Do not keep the hypothesis and the capture as two code paths. The inline objects are a stand-in for the table as written here. They are not a second grammar that survives a disagreeing capture. The acceptance test is not satisfied by a copy of the unfiltered Beszel paste. `tests/fixtures/amd-smi/version.txt` must contain the `amd-smi` version stdout from the same machine.
+`unrecognized` is false when step 3 finds GPU 0, even if steps 4–6 are null. `tests/fixtures/amd-smi/version.txt` is the mabel `amd-smi version` stdout. `tests/fixtures/amd-smi/expected.json` is the four-field result of these steps on `metric.json`.
 
 ### Polling and lifetime
 
@@ -397,7 +402,7 @@ indicator, if generation still matches
 ### Alternative G: Combined rocm-smi argv, or rocm-smi --json
 
 *   **Pros**: One process instead of three.
-*   **Cons**: No captured 7.1.1 stdout in the tree shows that the current regex captures survive. `--json` is a different document.
+*   **Cons**: Harlow's captured text already parses with the three current commands. `--json` is a different document. Combining the flags was not part of that capture.
 *   **Reason for Rejection**: a later change can switch argv in the rocm module after a fixture shows the same three numbers.
 
 ### Alternative H: amd-smi human-readable text instead of JSON
@@ -438,7 +443,7 @@ There is no stored setting today. The default `auto` is the new behavior. Disabl
 
 *   **Wrong VRAM scale.** Public samples label used VRAM as `MB`. Passing that number through `formatBytes` as bytes divides the displayed size by 1024². Mitigation: multiply only when `unit` is `MB`, by 1024², then `Math.trunc`. A missing unit is null. `expected.json` is the check.
 *   **Hotspot is not the junction number.** The panel does not print the sensor name. The 70 and 85 classes follow hotspot for `amd-smi` and junction for `rocm-smi`, including when those two numbers disagree. The readme says that. Edge is not a stand-in. The accessible name stays `AMD GPU Monitor`.
-*   **JSON envelope differs on the Ubuntu amd-smi 7.2.0 package.** Mitigation: unrecognized output does not invent keys. CUJ 8 falls back to rocm-smi when it exists. The parser is not accepted until `tests/fixtures/amd-smi/metric.json` and `version.txt` exist from the filtered command, and the field table in this file matches that JSON. A missing fixture fails the acceptance test. A wedged sample is CUJ 11. Three all-null samples with no fallback remove the timer.
+*   **JSON envelope on mabel.** The capture is a `gpu_data` object. `clock.gfx_0.clk` and `temperature.hotspot` are `"N/A"`, so those labels stay empty and VRAM still updates. `temperature.edge` and `clock.apu_average_gfxclk_frequency` are not read. A wedged sample is CUJ 11. Three all-null samples with no fallback remove the timer.
 *   **gnome-shell PATH omits `/opt/rocm/bin`.** A terminal can find the tool while the extension reports it missing. Mitigation: the two absolute directories above.
 *   **Late callback after destroy or after a tool switch.** Mitigation: generation plus `Gio.Cancellable` plus `force_exit`.
 *   **Schema not compiled.** `getSettings()` throws and the extension fails enable. Mitigation: the readme's `glib-compile-schemas schemas` step. A throw during enable is logged once by the shell; the extension does not loop.
@@ -470,7 +475,7 @@ There is no stored setting today. The default `auto` is the new behavior. Disabl
 
 One phase. Land every file in this list in the same change, after Chris accepts this document. `extension.js` must not import a module that is not part of that change. The design commit itself contains only this file.
 
-Fixture capture is part of the implementation, on a machine with Ubuntu packages `amd-smi` 7.2.0 and `rocm-smi` 7.1.1. It is not part of writing this design. If `metric.json` does not match the parser steps, update the field table in this document before changing the parser. Do not delete a failing acceptance test to make `node --test` pass.
+The acceptance fixtures are the mabel amd-smi capture and the harlow rocm-smi capture described in the parse contract. Mabel has no rocm-smi output. Harlow has no amd-smi output.
 
 ### Target Files to Create/Modify
 

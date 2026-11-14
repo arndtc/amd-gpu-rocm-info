@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { parseAmdSmiMetric } from "../parse-amd-smi.js";
@@ -92,16 +92,13 @@ test("invalid JSON is unrecognized", () => {
   });
 });
 
-test("captured amd-smi 7.2.0 metric JSON", () => {
+test("mabel amd-smi metric JSON", () => {
   const dir = new URL("./fixtures/amd-smi/", import.meta.url);
-  const metric = new URL("metric.json", dir);
-  const expected = new URL("expected.json", dir);
-  const version = new URL("version.txt", dir);
-  if (!existsSync(metric) || !existsSync(expected) || !existsSync(version)) {
-    throw new Error("captured amd-smi 7.2.0 fixture missing");
-  }
+  const version = readFileSync(new URL("version.txt", dir), "utf8");
+  assert.match(version, /AMDSMI Tool: 27\.1\.0\+7da43026/);
+  assert.match(version, /ROCm version: 10\.1\.0/);
   assert.deepEqual(
-    parseAmdSmiMetric(readFileSync(metric, "utf8")),
-    JSON.parse(readFileSync(expected, "utf8")),
+    parseAmdSmiMetric(readFileSync(new URL("metric.json", dir), "utf8")),
+    JSON.parse(readFileSync(new URL("expected.json", dir), "utf8")),
   );
 });

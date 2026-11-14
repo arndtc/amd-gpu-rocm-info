@@ -10,6 +10,7 @@ function asObject(value) {
 }
 
 function finiteUnit(node, units) {
+  if (node === "N/A") return null;
   const record = asObject(node);
   if (!record) return null;
   if (typeof record.value !== "number" || !Number.isFinite(record.value)) return null;
