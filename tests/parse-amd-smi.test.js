@@ -113,6 +113,24 @@ test("invalid JSON is unrecognized", () => {
   });
 });
 
+test("harlow discrete amd-smi keeps gfx_0 and hotspot", () => {
+  const dir = new URL("./fixtures/amd-smi/harlow/", import.meta.url);
+  const raw = readFileSync(new URL("metric.json", dir), "utf8");
+  const gpu = JSON.parse(raw).gpu_data[0];
+  assert.deepEqual(gpu.clock.gfx_0.clk, { value: 334, unit: "MHz" });
+  for (const name of ["gfx_1", "gfx_2", "gfx_3", "gfx_4", "gfx_5", "gfx_6", "gfx_7"]) {
+    assert.equal(gpu.clock[name].clk, "N/A");
+  }
+  assert.deepEqual(gpu.temperature.hotspot, { value: 36, unit: "C" });
+  const version = readFileSync(new URL("version.txt", dir), "utf8");
+  assert.match(version, /AMDSMI Tool: 26\.2\.1\+unknown/);
+  assert.match(version, /AMDSMI Library version: 26\.2\.1/);
+  assert.deepEqual(
+    parseAmdSmiMetric(raw),
+    JSON.parse(readFileSync(new URL("expected.json", dir), "utf8")),
+  );
+});
+
 test("mabel amd-smi metric JSON", () => {
   const dir = new URL("./fixtures/amd-smi/", import.meta.url);
   const version = readFileSync(new URL("version.txt", dir), "utf8");

@@ -22,7 +22,7 @@ Lookup order for each name is the session `PATH`, then `/usr/bin/<name>`, then `
 
 Set the tool from the extension preferences (`Monitoring tool`). The stored GSettings key is `smi-tool` in `org.gnome.shell.extensions.amd-gpu-rocm-info`, with values `auto`, `amd-smi`, and `rocm-smi`. `rocm-smi` stays supported until a later removal.
 
-The `amd-smi` JSON contract is the mabel capture in `tests/fixtures/amd-smi/` (AMDSMI Tool 27.1.0+7da43026, library 27.1.0, ROCm 10.1.0). Harlow's `rocm-smi` capture is in `tests/fixtures/rocm-smi/captured/` (ROCM-SMI 4.0.0+unknown, library 7.8.0). Field rules are in [the design](docs/designs/amd-smi-rocm-smi-interchange.md).
+The `amd-smi` JSON contract includes the mabel capture in `tests/fixtures/amd-smi/` (AMDSMI Tool 27.1.0+7da43026, library 27.1.0, ROCm 10.1.0) and the harlow discrete capture in `tests/fixtures/amd-smi/harlow/` (AMDSMI Tool 26.2.1+unknown, library 26.2.1). Harlow's `rocm-smi` capture is in `tests/fixtures/rocm-smi/captured/` (ROCM-SMI 4.0.0+unknown, library 7.8.0). Field rules are in [the design](docs/designs/amd-smi-rocm-smi-interchange.md).
 
 Install from a checkout:
 

@@ -10,7 +10,7 @@
 
 This extension shows three AMD GPU readings in the GNOME top panel: graphics clock, temperature, and VRAM used. Today those readings come only from `rocm-smi`. It runs on GNOME Shell 46 and GNOME Shell 50. The [amd-smi 7.2.0 CLI guide](https://rocm.docs.amd.com/projects/amdsmi/en/docs-7.2.0/how-to/amdsmi-cli-tool.html) says the tool "is intended to replace and deprecate the existing `rocm_smi` CLI tool". The panel should keep showing the same three readings when the machine has `amd-smi`, `rocm-smi`, both, or neither, without spawning a missing binary every 3 seconds.
 
-The captures in `tests/fixtures/` are from the test machines, not from the Ubuntu archive versions 7.2.0 and 7.1.1 that this design was first written against. Mabel has `/usr/bin/amd-smi` and no `rocm-smi`. `amd-smi version` printed `AMDSMI Tool: 27.1.0+7da43026 | AMDSMI Library version: 27.1.0 | ROCm version: 10.1.0`. Harlow has no `amd-smi`. `/usr/bin/rocm-smi` printed `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0`.
+The captures in `tests/fixtures/` are from the test machines, not from the Ubuntu archive versions 7.2.0 and 7.1.1 that this design was first written against. Mabel's checked-in `amd-smi` is `/usr/bin/amd-smi` with `AMDSMI Tool: 27.1.0+7da43026 | AMDSMI Library version: 27.1.0 | ROCm version: 10.1.0`, and that capture has no `rocm-smi`. Harlow's `rocm-smi` capture printed `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0`. A later harlow capture also has `/usr/bin/amd-smi` with `AMDSMI Tool: 26.2.1+unknown | AMDSMI Library version: 26.2.1`. That discrete document is `tests/fixtures/amd-smi/harlow/`. A newer mabel document is not part of this contract.
 
 The extension uuid stays `amd-gpu-rocm-info@black-hat`. The indicator stays at `Main.panel.addToStatusArea(uuid, indicator, 1, "left")`.
 
@@ -43,7 +43,7 @@ The official amd-smi help documents one snapshot command that can request clock,
 *   Choosing among several GPUs. The reading is GPU 0, matching today's first matching line.
 *   Power, fan, utilization, encoder clocks, or a sysfs / hwmon reader.
 *   `amd-smi --watch` or `rocm-smi` watch loops.
-*   A runtime check of the tool version. Mabel's amd-smi is 27.1.0 and harlow's rocm-smi is 4.0.0+unknown / library 7.8.0. Any other version is the binary that was found. Unreadable stdout takes the unrecognized-output path.
+*   A runtime check of the tool version. Checked-in versions are mabel amd-smi 27.1.0, harlow amd-smi 26.2.1, and harlow rocm-smi 4.0.0+unknown / library 7.8.0. Any other version is the binary that was found. Unreadable stdout takes the unrecognized-output path.
 *   Collapsing the three `rocm-smi` commands into one argv. That waits on a captured combined stdout that yields the same three numbers.
 *   GNOME Shell 51, a panel menu, gettext catalogs, a change to the indicator position, a change to the uuid, or a change to the upstream URL.
 *   Editing `stylesheet.css`, including the unused `.gpu-monitor-icon` rules and the `.system-status-icon` rule.
@@ -237,7 +237,9 @@ On that capture:
 
 A string `"N/A"` is unusable and does not throw. A numeric `clock.gfx_0.clk` or `temperature.hotspot` is used even when the APU fields are also present. The APU fields are read only when the discrete field is missing, `"N/A"`, or not a finite number with a matching unit. Those parser results are the three readings the first-sample check uses, so a complete Strix Halo sample does not fall back to `rocm-smi`.
 
-Harlow has no amd-smi stdout. Its `rocm-smi` stdout is under `tests/fixtures/rocm-smi/captured/`. `--showclocks` includes `sclk clock level: S: (0Mhz)`, so `gfxClockMhz` is 0. `--showtemp` includes `Temperature (Sensor junction) (C): 35.0`, so `junctionTempC` is 35. `--showmeminfo vram` includes `VRAM Total Used Memory (B): 3979702272`. Each command exited 0. stderr, not stdout, is `WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status`. The parser reads stdout. That warning line does not match the sclk, junction, or Used patterns, so a copy of it in the text does not change the three numbers.
+Harlow's discrete amd-smi capture is `tests/fixtures/amd-smi/harlow/metric.json`, from AMDSMI Tool 26.2.1+unknown, library 26.2.1. `clock.gfx_0.clk` is `{value: 334, unit: "MHz"}`, so `gfxClockMhz` is 334. `clock.gfx_1.clk` through `clock.gfx_7.clk` are the string `"N/A"` and are not read. `temperature.hotspot` is `{value: 36, unit: "C"}`, so `junctionTempC` is 36. `mem_usage.used_vram` is `{value: 3849, unit: "MB"}`, so `vramUsedBytes` is `3849 * 1024 * 1024` = 4035969024. There is no `apu_average_gfxclk_frequency` or `apu_temperature_gfx` on that document. A numeric `gfx_0.clk` and hotspot stay the fields; the Strix Halo substitutes are not used.
+
+Harlow's `rocm-smi` stdout is under `tests/fixtures/rocm-smi/captured/`. `--showclocks` includes `sclk clock level: S: (0Mhz)`, so `gfxClockMhz` is 0. `--showtemp` includes `Temperature (Sensor junction) (C): 35.0`, so `junctionTempC` is 35. `--showmeminfo vram` includes `VRAM Total Used Memory (B): 3979702272`. Each command exited 0. stderr, not stdout, is `WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status`. The parser reads stdout. That warning line does not match the sclk, junction, or Used patterns, so a copy of it in the text does not change the three numbers.
 
 Parser steps. A missing node or a string `"N/A"` yields null for that field and does not throw:
 
