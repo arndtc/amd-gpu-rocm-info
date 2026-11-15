@@ -10,7 +10,7 @@
 
 This extension shows three AMD GPU readings in the GNOME top panel: graphics clock, temperature, and VRAM used. Today those readings come only from `rocm-smi`. It runs on GNOME Shell 46 and GNOME Shell 50. The [amd-smi 7.2.0 CLI guide](https://rocm.docs.amd.com/projects/amdsmi/en/docs-7.2.0/how-to/amdsmi-cli-tool.html) says the tool "is intended to replace and deprecate the existing `rocm_smi` CLI tool". The panel should keep showing the same three readings when the machine has `amd-smi`, `rocm-smi`, both, or neither, without spawning a missing binary every 3 seconds.
 
-The captures in `tests/fixtures/` are from the test machines, not from the Ubuntu archive versions 7.2.0 and 7.1.1 that this design was first written against. Mabel's checked-in `amd-smi` is `/usr/bin/amd-smi` with `AMDSMI Tool: 27.1.0+7da43026 | AMDSMI Library version: 27.1.0 | ROCm version: 10.1.0`, and that capture has no `rocm-smi`. Harlow's `rocm-smi` capture printed `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0`. A later harlow capture also has `/usr/bin/amd-smi` with `AMDSMI Tool: 26.2.1+unknown | AMDSMI Library version: 26.2.1`. That discrete document is `tests/fixtures/amd-smi/harlow/`. A newer mabel document is not part of this contract.
+The captures in `tests/fixtures/` are from the test machines, not from the Ubuntu archive versions 7.2.0 and 7.1.1 that this design was first written against. The Strix Halo APU capture `tests/fixtures/amd-smi/strix-halo-27.1.0/` is `/usr/bin/amd-smi` with `AMDSMI Tool: 27.1.0+7da43026 | AMDSMI Library version: 27.1.0 | ROCm version: 10.1.0`, and that capture has no `rocm-smi`. A discrete GPU's `rocm-smi` capture printed `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0` (`tests/fixtures/rocm-smi/discrete-4.0.0/`). That same discrete GPU also has `/usr/bin/amd-smi` with `AMDSMI Tool: 26.2.1+unknown | AMDSMI Library version: 26.2.1` in `tests/fixtures/amd-smi/discrete-26.2.1/`. A later Strix Halo capture is in `tests/fixtures/amd-smi/strix-halo-26.2.1/` and `tests/fixtures/rocm-smi/strix-halo-4.0.0/`.
 
 The extension uuid stays `amd-gpu-rocm-info@black-hat`. The indicator stays at `Main.panel.addToStatusArea(uuid, indicator, 1, "left")`.
 
@@ -26,7 +26,7 @@ Each child parses its own stdout with a regex and writes one label. When `rocm-s
 
 A machine that has `amd-smi` and no `rocm-smi` gets no readings. A machine that has both still runs only `rocm-smi`. There is no setting to choose.
 
-The official amd-smi help documents one snapshot command that can request clock, temperature, and memory usage together, with `--json`. The mabel capture of that command is the JSON contract in the parse section.
+The official amd-smi help documents one snapshot command that can request clock, temperature, and memory usage together, with `--json`. The Strix Halo 27.1.0 capture of that command is the JSON contract in the parse section.
 
 ## Goals
 
@@ -43,7 +43,7 @@ The official amd-smi help documents one snapshot command that can request clock,
 *   Choosing among several GPUs. The reading is GPU 0, matching today's first matching line.
 *   Power, fan, utilization, encoder clocks, or a sysfs / hwmon reader.
 *   `amd-smi --watch` or `rocm-smi` watch loops.
-*   A runtime check of the tool version. Checked-in versions are mabel amd-smi 27.1.0, harlow amd-smi 26.2.1, and harlow rocm-smi 4.0.0+unknown / library 7.8.0. Any other version is the binary that was found. Unreadable stdout takes the unrecognized-output path.
+*   A runtime check of the tool version. Checked-in versions are Strix Halo amd-smi 27.1.0 and 26.2.1, discrete amd-smi 26.2.1, and rocm-smi 4.0.0+unknown / library 7.8.0. Any other version is the binary that was found. Unreadable stdout takes the unrecognized-output path.
 *   Collapsing the three `rocm-smi` commands into one argv. That waits on a captured combined stdout that yields the same three numbers.
 *   GNOME Shell 51, a panel menu, gettext catalogs, a change to the indicator position, a change to the uuid, or a change to the upstream URL.
 *   Editing `stylesheet.css`, including the unused `.gpu-monitor-icon` rules and the `.system-status-icon` rule.
@@ -59,7 +59,7 @@ The implementation plan below uses the decided column. Chris can reject a row be
 | Which temperature sensor? | `amd-smi` hotspot, then `temperature.edge` when hotspot is unusable. `rocm-smi` junction, then edge when junction is absent. Not `apu_temperature_gfx`, not memory. The label says `edge` when that fallback is used. Same 70 / 85 colors. | The parsers and the temperature label. |
 | Which directories are searched? | gnome-shell `PATH`, then `/usr/bin/<name>`, then `/opt/rocm/bin/<name>`. | `resolveToolPath` in the implementation plan. |
 | Which shell versions? | `shell-version` is `["46", "50"]`. Keep `St.BoxLayout` `vertical: false`. Do not add `51`. | `metadata.json` and the box constructor. |
-| What if the captured JSON differs from the public samples? | Three amd-smi documents are checked in. Mabel 27.1.0 uses `apu_average_gfxclk_frequency` (830 MHz) when `gfx_0` is `"N/A"`, and edge (39°C) when hotspot is `"N/A"`. The later mabel capture (AMDSMI 26.2.1, ROCm 10.1.0, `tests/fixtures/amd-smi/mabel-both/`) has every clock `"N/A"` and no APU clock, so the clock label is `N/A`, and edge is 39°C. Harlow 26.2.1 uses numeric `gfx_0` (334 MHz) and hotspot (36°C). | The parsers and fixtures. |
+| What if the captured JSON differs from the public samples? | Three amd-smi documents are checked in. Strix Halo 27.1.0 uses `apu_average_gfxclk_frequency` (830 MHz) when `gfx_0` is `"N/A"`, and edge (39°C) when hotspot is `"N/A"`. The later Strix Halo capture (AMDSMI 26.2.1, ROCm 10.1.0, `tests/fixtures/amd-smi/strix-halo-26.2.1/`) has every clock `"N/A"` and no APU clock, so the clock label is `N/A`, and edge is 39°C. Discrete 26.2.1 uses numeric `gfx_0` (334 MHz) and hotspot (36°C). | The parsers and fixtures. |
 
 ## Critical User Journeys (CUJs)
 
@@ -227,7 +227,7 @@ Both parsers return:
 *   Temperature: `stdout.match(/.*jun.*: ([0-9.]+).*/i)`, then `parseInt`. The current class is `/.*jun.*: ([\d|\.]+).*/i`. The new class drops the pipe character and keeps the `+`. `parseInt` of a non-numeric match is null, not `NaN` on the label. No `jun` line yields null.
 *   VRAM: `stdout.match(/.*Used.*: (\d+).*/i)`, then `parseInt`, as bytes. No match yields null.
 
-`parse-amd-smi.js` takes the single stdout string, `JSON.parse`s it, and reads GPU 0. The mabel capture of `amd-smi metric --gpu 0 --clock --temperature --mem-usage --json` is `tests/fixtures/amd-smi/metric.json`. It is a JSON object whose only top-level key is `gpu_data`. There is no top-level `memory-usage` key. `gpu_data[0]` holds `gpu`, `clock`, `temperature`, and `mem_usage`. `gpu` is the number 0.
+`parse-amd-smi.js` takes the single stdout string, `JSON.parse`s it, and reads GPU 0. The Strix Halo 27.1.0 capture of `amd-smi metric --gpu 0 --clock --temperature --mem-usage --json` is `tests/fixtures/amd-smi/strix-halo-27.1.0/metric.json`. It is a JSON object whose only top-level key is `gpu_data`. There is no top-level `memory-usage` key. `gpu_data[0]` holds `gpu`, `clock`, `temperature`, and `mem_usage`. `gpu` is the number 0.
 
 On that capture:
 
@@ -235,26 +235,26 @@ On that capture:
 *   `temperature.hotspot` is the string `"N/A"`. `temperature.edge` is `{value: 39, unit: "C"}`. `junctionTempC` is 39 and `tempSource` is `edge`. `temperature.apu_temperature_gfx` is `{value: 39.12, unit: "C"}` and is not read.
 *   `mem_usage.used_vram` is `{value: 951, unit: "MB"}`. `vramUsedBytes` is `951 * 1024 * 1024` = 997195776.
 
-The later mabel capture is `tests/fixtures/amd-smi/mabel-both/`. `amd-smi version` printed `AMDSMI Tool: 26.2.1+unknown | AMDSMI Library version: 26.2.1 | ROCm version: 10.1.0`. `clock.gfx_0.clk` is `"N/A"`, `apu_average_gfxclk_frequency` is absent, and the other clock nodes in that file are `"N/A"`, so `gfxClockMhz` is null and the panel clock label is `N/A`. `temperature.hotspot` is `"N/A"`. `temperature.edge` is `{value: 39, unit: "C"}`, so the temperature label is `39°C edge`. `mem_usage.used_vram` is `{value: 957, unit: "MB"}`, so `vramUsedBytes` is `957 * 1024 * 1024` = 1003487232.
+The later Strix Halo capture is `tests/fixtures/amd-smi/strix-halo-26.2.1/`. `amd-smi version` printed `AMDSMI Tool: 26.2.1+unknown | AMDSMI Library version: 26.2.1 | ROCm version: 10.1.0`. `clock.gfx_0.clk` is `"N/A"`, `apu_average_gfxclk_frequency` is absent, and the other clock nodes in that file are `"N/A"`, so `gfxClockMhz` is null and the panel clock label is `N/A`. `temperature.hotspot` is `"N/A"`. `temperature.edge` is `{value: 39, unit: "C"}`, so the temperature label is `39°C edge`. `mem_usage.used_vram` is `{value: 957, unit: "MB"}`, so `vramUsedBytes` is `957 * 1024 * 1024` = 1003487232.
 
-That same machine's `rocm-smi` stdout is `tests/fixtures/rocm-smi/mabel-both/`. `sclk` is `(813Mhz)`. There is no junction line. Edge is `39.0`, so the temperature label is `39°C edge`. `VRAM Total Used Memory (B)` is 1004412928. `rocm-smi --version` printed `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0`.
+That same capture's `rocm-smi` stdout is `tests/fixtures/rocm-smi/strix-halo-4.0.0/`. `sclk` is `(813Mhz)`. There is no junction line. Edge is `39.0`, so the temperature label is `39°C edge`. `VRAM Total Used Memory (B)` is 1004412928. `rocm-smi --version` printed `ROCM-SMI version: 4.0.0+unknown` and `ROCM-SMI-LIB version: 7.8.0`.
 
 A string `"N/A"` is unusable and does not throw. A numeric `clock.gfx_0.clk` or `temperature.hotspot` is used even when another field is also present. `apu_average_gfxclk_frequency` is read only when `gfx_0.clk` is unusable and that APU field exists. Edge is read only when hotspot (amd-smi) or junction (rocm-smi) is unusable. The panel shows the backend name, and it shows the word `edge` when the temperature came from edge. An incomplete sample stays on the backend chosen at enable.
 
-Harlow's discrete amd-smi capture is `tests/fixtures/amd-smi/harlow/metric.json`, from AMDSMI Tool 26.2.1+unknown, library 26.2.1. `clock.gfx_0.clk` is `{value: 334, unit: "MHz"}`, so `gfxClockMhz` is 334. `clock.gfx_1.clk` through `clock.gfx_7.clk` are the string `"N/A"` and are not read. `temperature.hotspot` is `{value: 36, unit: "C"}`, so `junctionTempC` is 36. `mem_usage.used_vram` is `{value: 3849, unit: "MB"}`, so `vramUsedBytes` is `3849 * 1024 * 1024` = 4035969024. There is no `apu_average_gfxclk_frequency` or `apu_temperature_gfx` on that document. A numeric `gfx_0.clk` and hotspot stay the fields; the Strix Halo substitutes are not used.
+The discrete amd-smi capture is `tests/fixtures/amd-smi/discrete-26.2.1/metric.json`, from AMDSMI Tool 26.2.1+unknown, library 26.2.1. `clock.gfx_0.clk` is `{value: 334, unit: "MHz"}`, so `gfxClockMhz` is 334. `clock.gfx_1.clk` through `clock.gfx_7.clk` are the string `"N/A"` and are not read. `temperature.hotspot` is `{value: 36, unit: "C"}`, so `junctionTempC` is 36. `mem_usage.used_vram` is `{value: 3849, unit: "MB"}`, so `vramUsedBytes` is `3849 * 1024 * 1024` = 4035969024. There is no `apu_average_gfxclk_frequency` or `apu_temperature_gfx` on that document. A numeric `gfx_0.clk` and hotspot stay the fields; the Strix Halo substitutes are not used.
 
-Harlow's `rocm-smi` stdout is under `tests/fixtures/rocm-smi/captured/`. `--showclocks` includes `sclk clock level: S: (0Mhz)`, so `gfxClockMhz` is 0. `--showtemp` includes `Temperature (Sensor junction) (C): 35.0`, so `junctionTempC` is 35. `--showmeminfo vram` includes `VRAM Total Used Memory (B): 3979702272`. Each command exited 0. stderr, not stdout, is `WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status`. The parser reads stdout. That warning line does not match the sclk, junction, or Used patterns, so a copy of it in the text does not change the three numbers.
+The discrete `rocm-smi` stdout is under `tests/fixtures/rocm-smi/discrete-4.0.0/`. `--showclocks` includes `sclk clock level: S: (0Mhz)`, so `gfxClockMhz` is 0. `--showtemp` includes `Temperature (Sensor junction) (C): 35.0`, so `junctionTempC` is 35. `--showmeminfo vram` includes `VRAM Total Used Memory (B): 3979702272`. Each command exited 0. stderr, not stdout, is `WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status`. The parser reads stdout. That warning line does not match the sclk, junction, or Used patterns, so a copy of it in the text does not change the three numbers.
 
 Parser steps. A missing node or a string `"N/A"` yields null for that field and does not throw:
 
 1. `JSON.parse`. A throw returns three nulls and `unrecognized: true`.
-2. If the value is an array, search it. If it is an object and `gpu_data` is an array, search that array. Any other top-level shape returns three nulls and `unrecognized: true`. The mabel capture uses the `gpu_data` branch.
+2. If the value is an array, search it. If it is an object and `gpu_data` is an array, search that array. Any other top-level shape returns three nulls and `unrecognized: true`. The Strix Halo 27.1.0 capture uses the `gpu_data` branch.
 3. Select the first element in array order whose `gpu` property is the number `0`. If none, three nulls and `unrecognized: true`. Do not substitute another GPU.
 4. Clock: `clock.gfx_0.clk` is usable only when `value` is a finite number and `unit` is `MHz`. Store `Math.trunc(value)` and set `clockSource` to `gfx_0`. Read `clk`, not `min_clk` or `max_clk`. The string `"N/A"` is unusable. When `clk` is unusable, use `clock.apu_average_gfxclk_frequency` with the same unit rule and set `clockSource` to `apu_average_gfxclk`. If that is missing or unusable, the clock is null and `clockSource` is null. The panel then shows `N/A`.
 5. Temperature: `temperature.hotspot` is usable only when `value` is a finite number and `unit` is `C` or `°C`. Store `parseInt(value, 10)` and set `tempSource` to `hotspot`. The string `"N/A"` is unusable. When hotspot is unusable, use `temperature.edge` with the same unit rule and `parseInt`, and set `tempSource` to `edge`. Do not read `apu_temperature_gfx` or `mem`. For `rocm-smi`, use the junction line first and the edge line only when junction is absent; `tempSource` is `junction` or `edge`. The temperature label includes the word `edge` when `tempSource` is `edge`.
 6. VRAM: `mem_usage.used_vram` is usable only when `value` is a finite number and `unit` is `MB` or `B`. `MB` means `Math.trunc(value * 1024 * 1024)`. `B` means `Math.trunc(value)`. Any other unit, or a missing unit, is null. Do not assume MB. A negative result is null.
 
-`unrecognized` is false when step 3 finds GPU 0, even if steps 4–6 are null. `tests/fixtures/amd-smi/version.txt` is the mabel `amd-smi version` stdout. `tests/fixtures/amd-smi/expected.json` is the four-field result of these steps on `metric.json`.
+`unrecognized` is false when step 3 finds GPU 0, even if steps 4–6 are null. `tests/fixtures/amd-smi/strix-halo-27.1.0/version.txt` is that capture's `amd-smi version` stdout. `tests/fixtures/amd-smi/strix-halo-27.1.0/expected.json` is the parser result of these steps on `metric.json`.
 
 ### Polling and lifetime
 
@@ -407,7 +407,7 @@ indicator, if generation still matches
 ### Alternative G: Combined rocm-smi argv, or rocm-smi --json
 
 *   **Pros**: One process instead of three.
-*   **Cons**: Harlow's captured text already parses with the three current commands. `--json` is a different document. Combining the flags was not part of that capture.
+*   **Cons**: The discrete captured text already parses with the three current commands. `--json` is a different document. Combining the flags was not part of that capture.
 *   **Reason for Rejection**: a later change can switch argv in the rocm module after a fixture shows the same three numbers.
 
 ### Alternative H: amd-smi human-readable text instead of JSON
@@ -448,7 +448,7 @@ There is no stored setting today. The default `auto` is the new behavior. Disabl
 
 *   **Wrong VRAM scale.** Public samples label used VRAM as `MB`. Passing that number through `formatBytes` as bytes divides the displayed size by 1024². Mitigation: multiply only when `unit` is `MB`, by 1024², then `Math.trunc`. A missing unit is null. `expected.json` is the check.
 *   **Hotspot is not the junction number.** The panel does not print the sensor name. The 70 and 85 classes follow the amd-smi temperature the parser returns (hotspot, or `apu_temperature_gfx` when hotspot is unusable) and the rocm-smi junction. Edge is not a stand-in. The accessible name stays `AMD GPU Monitor`.
-*   **JSON envelope on mabel.** The capture is a `gpu_data` object. `clock.gfx_0.clk` and `temperature.hotspot` are `"N/A"`. The panel uses `apu_average_gfxclk_frequency` (830 MHz) and `apu_temperature_gfx` (39.12°C, shown as 39). `temperature.edge` is not read. A wedged sample is CUJ 11. Three all-null samples with no fallback remove the timer.
+*   **JSON envelope on Strix Halo.** The 27.1.0 capture is a `gpu_data` object. `clock.gfx_0.clk` and `temperature.hotspot` are `"N/A"`. The panel uses `apu_average_gfxclk_frequency` (830 MHz) and edge (39°C, labeled edge). A wedged sample is CUJ 11. Three all-null samples with no fallback remove the timer.
 *   **gnome-shell PATH omits `/opt/rocm/bin`.** A terminal can find the tool while the extension reports it missing. Mitigation: the two absolute directories above.
 *   **Late callback after destroy or after a tool switch.** Mitigation: generation plus `Gio.Cancellable` plus `force_exit`.
 *   **Schema not compiled.** `getSettings()` throws and the extension fails enable. Mitigation: the readme's `glib-compile-schemas schemas` step. A throw during enable is logged once by the shell; the extension does not loop.
@@ -480,7 +480,7 @@ There is no stored setting today. The default `auto` is the new behavior. Disabl
 
 One phase. Land every file in this list in the same change, after Chris accepts this document. `extension.js` must not import a module that is not part of that change. The design commit itself contains only this file.
 
-The acceptance fixtures are the mabel amd-smi capture and the harlow rocm-smi capture described in the parse contract. Mabel has no rocm-smi output. Harlow has no amd-smi output.
+The acceptance fixtures are the Strix Halo and discrete captures described in the parse contract. The 27.1.0 Strix Halo directory has no rocm-smi output. The discrete amd-smi and rocm-smi captures are separate directories.
 
 ### Target Files to Create/Modify
 

@@ -61,8 +61,8 @@ test("edge is used when junction is absent", () => {
   );
 });
 
-test("mabel rocm-smi uses sclk and edge", () => {
-  const dir = new URL("./fixtures/rocm-smi/mabel-both/", import.meta.url);
+test("strix halo rocm-smi 4.0.0 uses sclk and edge", () => {
+  const dir = new URL("./fixtures/rocm-smi/strix-halo-4.0.0/", import.meta.url);
   const read = (name) => readFileSync(new URL(name, dir), "utf8");
   const version = read("version.txt");
   assert.match(version, /ROCM-SMI version: 4\.0\.0\+unknown/);
@@ -77,8 +77,8 @@ test("mabel rocm-smi uses sclk and edge", () => {
   );
 });
 
-test("harlow rocm-smi stdout", () => {
-  const dir = new URL("./fixtures/rocm-smi/captured/", import.meta.url);
+test("discrete rocm-smi 4.0.0 stdout", () => {
+  const dir = new URL("./fixtures/rocm-smi/discrete-4.0.0/", import.meta.url);
   const read = (name) => readFileSync(new URL(name, dir), "utf8");
   const version = read("version.txt");
   assert.match(version, /ROCM-SMI version: 4\.0\.0\+unknown/);
@@ -94,8 +94,8 @@ test("harlow rocm-smi stdout", () => {
   );
 });
 
-test("harlow low-power stderr warning does not change the parse", () => {
-  const dir = new URL("./fixtures/rocm-smi/captured/", import.meta.url);
+test("discrete low-power stderr warning does not change the parse", () => {
+  const dir = new URL("./fixtures/rocm-smi/discrete-4.0.0/", import.meta.url);
   const read = (name) => readFileSync(new URL(name, dir), "utf8");
   const warning = read("low-power.stderr");
   assert.match(warning, /low-power state/);

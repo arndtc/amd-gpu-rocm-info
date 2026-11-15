@@ -127,8 +127,8 @@ test("invalid JSON is unrecognized", () => {
   });
 });
 
-test("harlow discrete amd-smi keeps gfx_0 and hotspot", () => {
-  const dir = new URL("./fixtures/amd-smi/harlow/", import.meta.url);
+test("discrete amd-smi 26.2.1 keeps gfx_0 and hotspot", () => {
+  const dir = new URL("./fixtures/amd-smi/discrete-26.2.1/", import.meta.url);
   const raw = readFileSync(new URL("metric.json", dir), "utf8");
   const gpu = JSON.parse(raw).gpu_data[0];
   assert.deepEqual(gpu.clock.gfx_0.clk, { value: 334, unit: "MHz" });
@@ -145,8 +145,8 @@ test("harlow discrete amd-smi keeps gfx_0 and hotspot", () => {
   );
 });
 
-test("mabel later amd-smi shows edge and no clock", () => {
-  const dir = new URL("./fixtures/amd-smi/mabel-both/", import.meta.url);
+test("strix halo amd-smi 26.2.1 shows edge and no clock", () => {
+  const dir = new URL("./fixtures/amd-smi/strix-halo-26.2.1/", import.meta.url);
   const version = readFileSync(new URL("version.txt", dir), "utf8");
   assert.match(version, /AMDSMI Tool: 26\.2\.1\+unknown/);
   assert.match(version, /ROCm version: 10\.1\.0/);
@@ -158,8 +158,8 @@ test("mabel later amd-smi shows edge and no clock", () => {
   );
 });
 
-test("mabel amd-smi metric JSON", () => {
-  const dir = new URL("./fixtures/amd-smi/", import.meta.url);
+test("strix halo amd-smi 27.1.0 metric JSON", () => {
+  const dir = new URL("./fixtures/amd-smi/strix-halo-27.1.0/", import.meta.url);
   const version = readFileSync(new URL("version.txt", dir), "utf8");
   assert.match(version, /AMDSMI Tool: 27\.1\.0\+7da43026/);
   assert.match(version, /ROCm version: 10\.1\.0/);
