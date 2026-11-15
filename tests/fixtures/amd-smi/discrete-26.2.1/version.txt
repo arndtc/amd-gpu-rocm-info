@@ -1,0 +1,1 @@
+AMDSMI Tool: 26.2.1+unknown | AMDSMI Library version: 26.2.1 | ROCm version: N/A | amdgpu version: Linuxversion7.0.0-43-generic(buildd@lcy02-amd64-080)(x86_64-linux-gnu-gcc(Ubuntu15.2.0-16ubuntu1)15.2.0,GNUld(GNUBinutilsforUbuntu)2.46)#43-UbuntuSMPPREEMPT_DYNAMICFriOct2313:25:25UTC2026 | hsmp version: N/A

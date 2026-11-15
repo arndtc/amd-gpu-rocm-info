@@ -1,0 +1,2 @@
+GPU[0]		: sclk clock level: 1 (1500Mhz)
+GPU[0]		: mclk clock level: 0 (96Mhz)

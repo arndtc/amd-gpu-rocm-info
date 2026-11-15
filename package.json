@@ -1,0 +1,5 @@
+{
+  "name": "amd-gpu-rocm-info",
+  "private": true,
+  "type": "module"
+}

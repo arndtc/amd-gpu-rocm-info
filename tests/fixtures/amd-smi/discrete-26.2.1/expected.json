@@ -1,0 +1,8 @@
+{
+  "gfxClockMhz": 334,
+  "junctionTempC": 36,
+  "clockSource": "gfx_0",
+  "tempSource": "hotspot",
+  "vramUsedBytes": 4035969024,
+  "unrecognized": false
+}

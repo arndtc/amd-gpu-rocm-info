@@ -1,0 +1,1 @@
+AMDSMI Tool: 27.1.0+7da43026 | AMDSMI Library version: 27.1.0 | ROCm version: 10.1.0 | amdgpu version: N/A | ionic version: N/A
